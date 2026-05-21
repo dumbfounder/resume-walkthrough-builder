@@ -116,6 +116,7 @@ button { font: inherit; }
   margin: 76px auto 0;
 }
 .resume-document {
+  position: relative;
   min-height: 1060px;
   background: var(--paper);
   border: 1px solid rgba(31, 37, 44, .12);
@@ -123,17 +124,24 @@ button { font: inherit; }
   padding: clamp(38px, 6vw, 68px);
   transition: transform .5s ease, filter .5s ease;
 }
+.resume-document::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 9px;
+  background: linear-gradient(#245f65, #b8892f);
+}
 .tour-active .resume-document {
   transform: translateX(-7%);
 }
 .resume-head {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 280px);
   gap: 24px;
   align-items: flex-start;
   padding-bottom: 22px;
   margin-bottom: 22px;
-  border-bottom: 2px solid var(--text);
+  border-bottom: 1px solid rgba(31, 37, 44, .24);
 }
 .resume-head p {
   margin: 0 0 8px;
@@ -232,7 +240,7 @@ button { font: inherit; }
   top: 50%;
   right: clamp(18px, 5vw, 72px);
   z-index: 12;
-  width: min(430px, calc(100% - 36px));
+  width: min(410px, calc(100% - 36px));
   transform: translateY(-50%) translateX(18px);
   opacity: 0;
   pointer-events: none;
@@ -240,7 +248,7 @@ button { font: inherit; }
   border-radius: 20px;
   background: rgba(255, 253, 248, .97);
   box-shadow: 0 28px 100px rgba(31, 37, 44, .25);
-  padding: 22px;
+  padding: 18px;
   transition: opacity .35s ease, transform .35s ease;
 }
 .tour-active .tour-popover {
@@ -259,6 +267,41 @@ button { font: inherit; }
   border-left: 1px solid rgba(36, 95, 101, .28);
   border-bottom: 1px solid rgba(36, 95, 101, .28);
   transform: rotate(45deg);
+}
+.tour-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 14px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid rgba(31, 37, 44, .1);
+}
+.tour-actions span {
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+.tour-actions div {
+  display: flex;
+  gap: 8px;
+}
+.tour-actions button {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--paper);
+  color: var(--text);
+  padding: 7px 12px;
+  cursor: pointer;
+}
+.tour-actions button:last-child {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: white;
+}
+.tour-actions button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
 }
 .tour-kicker {
   display: flex;
@@ -528,6 +571,25 @@ function exportJs(): string {
     }
     return "<mark>" + escaped + "</mark>";
   }
+  function naturalTitle(value) {
+    return String(value || "")
+      .replace(/\\bexecutive pattern\\b/gi, "career context")
+      .replace(/\\bstrategic signal\\b/gi, "relevant signal")
+      .replace(/\\bleadership archetype\\b/gi, "leadership experience")
+      .replace(/\\bfit vector\\b/gi, "fit")
+      .replace(/\\bproof point\\b/gi, "evidence")
+      .replace(/\\bmental model\\b/gi, "starting point");
+  }
+  function detailBlocks(step) {
+    if (Array.isArray(step.detailBlocks) && step.detailBlocks.length) {
+      return step.detailBlocks.filter(block => block && (block.title || block.body));
+    }
+    return [
+      { title: "Why this matters", body: step.whyItMatters, kind: "standard" },
+      { title: "How this connects", body: step.fitLanguage, kind: "standard" },
+      { title: "Where to be careful", body: step.caveat, kind: "caveat" }
+    ].filter(block => String(block.body || "").trim());
+  }
   function renderResume(step) {
     const sections = resumeSections();
     const query = focusQuery(step);
@@ -576,13 +638,12 @@ function exportJs(): string {
   }
   function renderPopover(step) {
     return '<article class="tour-popover">' +
-      '<div class="tour-kicker"><span>' + esc(step.eyebrow || "Step " + (active + 1)) + '</span><em>' + esc(step.confidence || "") + '</em></div>' +
-      '<h2>' + esc(step.title || "") + '</h2>' +
+      '<div class="tour-actions"><span>Step ' + (active + 1) + ' of ' + Math.max(1, steps.length) + '</span><div><button type="button" data-prev ' + (active <= 0 ? "disabled" : "") + '>Back</button><button type="button" data-next ' + (active >= steps.length - 1 ? "disabled" : "") + '>Next</button></div></div>' +
+      '<div class="tour-kicker"><span>What to notice</span><em>' + esc(step.confidence || "") + '</em></div>' +
+      '<h2>' + esc(naturalTitle(step.title || "")) + '</h2>' +
       '<p class="tour-narrative">' + esc(step.narrative || "") + '</p>' +
       '<div class="tour-insights">' +
-        insight("Why this matters", step.whyItMatters, "") +
-        insight("How this maps to the role", step.fitLanguage, "") +
-        (step.caveat ? insight("Caveat", step.caveat, "caveat") : "") +
+        detailBlocks(step).map(block => insight(naturalTitle(block.title), block.body, block.kind === "caveat" ? "caveat" : "")).join("") +
       '</div>' +
       '<div class="tour-source"><span>Highlighted source</span><p>' + esc(step.evidenceQuote || "") + '</p></div>' +
       '<div class="dots">' + steps.map((_, index) => '<button class="dot ' + (index === active ? "active" : "") + '" type="button" data-step="' + index + '">' + (index + 1) + '</button>').join("") + '</div>' +
@@ -618,6 +679,14 @@ function exportJs(): string {
     if (!target || !target.matches) return;
     if (target.matches("[data-start]")) startTour();
     if (target.matches("[data-print]")) window.print();
+    if (target.matches("[data-next]")) {
+      active = Math.min(steps.length - 1, active + 1);
+      startTour();
+    }
+    if (target.matches("[data-prev]")) {
+      active = Math.max(0, active - 1);
+      startTour();
+    }
     if (target.matches("[data-mode]")) {
       mode = target.getAttribute("data-mode");
       if (mode === "walk") startTour();

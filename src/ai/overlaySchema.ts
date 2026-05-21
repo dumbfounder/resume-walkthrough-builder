@@ -6,6 +6,24 @@ export const overlayStepSchema = {
     title: { type: "string" },
     eyebrow: { type: "string" },
     narrative: { type: "string" },
+    detailBlocks: {
+      type: "array",
+      minItems: 1,
+      maxItems: 4,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          title: { type: "string" },
+          body: { type: "string" },
+          kind: {
+            type: "string",
+            enum: ["standard", "caveat"]
+          }
+        },
+        required: ["title", "body", "kind"]
+      }
+    },
     evidenceQuote: { type: "string" },
     whyItMatters: { type: "string" },
     fitLanguage: { type: "string" },
@@ -21,6 +39,7 @@ export const overlayStepSchema = {
     "title",
     "eyebrow",
     "narrative",
+    "detailBlocks",
     "evidenceQuote",
     "whyItMatters",
     "fitLanguage",

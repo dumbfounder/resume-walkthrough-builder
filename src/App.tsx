@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { generateOverlayWalkthrough, reviseOverlayStep } from "./ai/openaiClient";
 import { buildOverlayHtml } from "./export/overlayHtmlExporter";
-import type { OverlayStep, OverlayWalkthroughModel, PolishedResume, StudioInputs, StudioState } from "./types/overlay";
+import type { OverlayDetailBlock, OverlayStep, OverlayWalkthroughModel, PolishedResume, StudioInputs, StudioState } from "./types/overlay";
 
 const STORAGE_KEY = "resume-overlay-studio:v2";
 const KEY_STORAGE_KEY = "resume-overlay-studio:provider-keys";
@@ -28,8 +28,9 @@ const emptyInputs: StudioInputs = {
   targetText: "",
   guidanceText: "",
   resumeStyleDirection: "",
-  verbosity: "balanced",
-  resumePolish: "executive rewrite"
+  walkthroughTechniquePrompt: "",
+  continuityPrompt: "",
+  verbosity: "balanced"
 };
 
 const emptyState: StudioState = {
@@ -200,6 +201,7 @@ export default function App() {
       title: "New step",
       eyebrow: "Needs editing",
       narrative: "",
+      detailBlocks: [{ title: "Needs editing", body: "", kind: "caveat" }],
       evidenceQuote: "Needs source evidence",
       whyItMatters: "",
       fitLanguage: "",
@@ -328,6 +330,15 @@ export default function App() {
           />
         </section>
       </main>
+      {state.isGenerating && (
+        <div className="loading-overlay" role="status" aria-live="polite">
+          <div>
+            <span />
+            <h2>Building the resume walkthrough</h2>
+            <p>Reworking the resume, mapping evidence to the role, and preparing the guided overlay.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -372,14 +383,6 @@ function ComposePanel({
             <option value="balanced">Balanced</option>
             <option value="detailed">Detailed</option>
             <option value="deep">Deep walkthrough</option>
-          </select>
-        </label>
-        <label>
-          Resume polish
-          <select value={state.inputs.resumePolish} onChange={(event) => onInputChange({ resumePolish: event.target.value as StudioInputs["resumePolish"] })}>
-            <option value="light cleanup">Light cleanup</option>
-            <option value="executive rewrite">Executive rewrite</option>
-            <option value="technical rewrite">Technical rewrite</option>
           </select>
         </label>
       </div>
@@ -449,21 +452,39 @@ function ComposePanel({
         />
       </label>
       <label>
-        Resume look and feel
+        Resume design prompt
         <textarea
           value={state.inputs.resumeStyleDirection}
           onChange={(event) => onInputChange({ resumeStyleDirection: event.target.value })}
           rows={4}
-          placeholder="Example: make the resume itself feel like a high-end executive briefing; restrained, dense, confident, with polished bullets and clear hierarchy."
+          placeholder="Make the resume itself feel finished: cleaner hierarchy, stronger wording, better pacing, restrained visual treatment, and no inflated claims."
         />
       </label>
       <label>
-        Direction for the generated walkthrough
+        Walkthrough technique prompt
+        <textarea
+          value={state.inputs.walkthroughTechniquePrompt}
+          onChange={(event) => onInputChange({ walkthroughTechniquePrompt: event.target.value })}
+          rows={4}
+          placeholder="Tell the model how the overlay should teach the resume: product tour, guided annotation, objection handling, board memo, founder pitch, technical deep dive, or another technique."
+        />
+      </label>
+      <label>
+        Continuity prompt
+        <textarea
+          value={state.inputs.continuityPrompt}
+          onChange={(event) => onInputChange({ continuityPrompt: event.target.value })}
+          rows={3}
+          placeholder="Describe the throughline the walkthrough should maintain from step to step."
+        />
+      </label>
+      <label>
+        Extra direction and constraints
         <textarea
           value={state.inputs.guidanceText}
           onChange={(event) => onInputChange({ guidanceText: event.target.value })}
           rows={5}
-          placeholder="Example: make it CEO-friendly, emphasize platform architecture, avoid sounding like a generic resume."
+          placeholder="Things to emphasize, avoid, simplify, or make more natural."
         />
       </label>
       <div className="action-row">
@@ -544,12 +565,30 @@ function EditPanel({
 
       <div className="regenerate-card">
         <label>
-          Resume look and feel
+          Resume design prompt
           <textarea
             value={inputs.resumeStyleDirection}
             onChange={(event) => onInputChange({ resumeStyleDirection: event.target.value })}
             rows={4}
-            placeholder="Example: make the resume feel like a crisp executive briefing, dense but elegant, with strong section hierarchy and no startup hype."
+            placeholder="Tell the model how to rework the resume before rebuilding the overlay."
+          />
+        </label>
+        <label>
+          Walkthrough technique prompt
+          <textarea
+            value={inputs.walkthroughTechniquePrompt}
+            onChange={(event) => onInputChange({ walkthroughTechniquePrompt: event.target.value })}
+            rows={4}
+            placeholder="Tell the model how the overlay should walk through the resume."
+          />
+        </label>
+        <label>
+          Continuity prompt
+          <textarea
+            value={inputs.continuityPrompt}
+            onChange={(event) => onInputChange({ continuityPrompt: event.target.value })}
+            rows={3}
+            placeholder="Give the model the story thread to keep across steps."
           />
         </label>
         <button type="button" className="primary" onClick={onRegenerateAll} disabled={!canRegenerate || isGenerating}>
@@ -601,28 +640,21 @@ function EditPanel({
             <input value={selectedStep.title} onChange={(event) => onStepChange({ title: event.target.value })} />
           </label>
           <label>
-            Small label
-            <input value={selectedStep.eyebrow} onChange={(event) => onStepChange({ eyebrow: event.target.value })} />
-          </label>
-          <label>
             Overlay narrative
             <textarea value={selectedStep.narrative} onChange={(event) => onStepChange({ narrative: event.target.value })} rows={5} />
           </label>
           <label>
+            Overlay cards
+            <textarea
+              value={serializeDetailBlocks(selectedStep)}
+              onChange={(event) => onStepChange({ detailBlocks: parseDetailBlocks(event.target.value) })}
+              rows={6}
+              placeholder="One card per line. Example: What to trust: This point is directly supported by the highlighted resume text."
+            />
+          </label>
+          <label>
             Source evidence quote
             <textarea value={selectedStep.evidenceQuote} onChange={(event) => onStepChange({ evidenceQuote: event.target.value })} rows={4} />
-          </label>
-          <label>
-            Why it matters
-            <textarea value={selectedStep.whyItMatters} onChange={(event) => onStepChange({ whyItMatters: event.target.value })} rows={4} />
-          </label>
-          <label>
-            How to say it
-            <textarea value={selectedStep.fitLanguage} onChange={(event) => onStepChange({ fitLanguage: event.target.value })} rows={4} />
-          </label>
-          <label>
-            Caveat
-            <textarea value={selectedStep.caveat} onChange={(event) => onStepChange({ caveat: event.target.value })} rows={3} />
           </label>
           <label>
             Confidence
@@ -710,16 +742,27 @@ function OverlayPreview({
       <div className="resume-tour-canvas">
         <ResumeDocument model={model} inputs={inputs} selectedStep={selectedStep} />
         <article className="tour-popover">
+          <div className="tour-actions">
+            <span>{stepPosition(model, selectedStep)}</span>
+            <div>
+              <button type="button" onClick={() => onSelectStep(adjacentStepId(model, selectedStep, -1))} disabled={stepIndex(model, selectedStep) <= 0}>
+                Back
+              </button>
+              <button type="button" onClick={() => onSelectStep(adjacentStepId(model, selectedStep, 1))} disabled={stepIndex(model, selectedStep) >= model.steps.length - 1}>
+                Next
+              </button>
+            </div>
+          </div>
           <div className="tour-kicker">
-            <span>{selectedStep.eyebrow}</span>
+            <span>What to notice</span>
             <em>{selectedStep.confidence}</em>
           </div>
-          <h2>{selectedStep.title}</h2>
+          <h2>{naturalDisplayTitle(selectedStep.title)}</h2>
           <p className="tour-narrative">{selectedStep.narrative}</p>
           <div className="tour-insights">
-            <Insight title="Why this matters" body={selectedStep.whyItMatters} />
-            <Insight title="How this maps to the role" body={selectedStep.fitLanguage} />
-            {selectedStep.caveat && <Insight title="Caveat" body={selectedStep.caveat} variant="caveat" />}
+            {displayDetailBlocks(selectedStep).map((block, index) => (
+              <Insight key={`${block.title}-${index}`} title={naturalDisplayTitle(block.title)} body={block.body} variant={block.kind === "caveat" ? "caveat" : ""} />
+            ))}
           </div>
           <div className="tour-source">
             <span>Highlighted source</span>
@@ -736,6 +779,38 @@ function OverlayPreview({
       </div>
     </div>
   );
+}
+
+function stepIndex(model: OverlayWalkthroughModel, selectedStep: OverlayStep): number {
+  return Math.max(0, model.steps.findIndex((step) => step.id === selectedStep.id));
+}
+
+function stepPosition(model: OverlayWalkthroughModel, selectedStep: OverlayStep): string {
+  return `Step ${stepIndex(model, selectedStep) + 1} of ${Math.max(1, model.steps.length)}`;
+}
+
+function adjacentStepId(model: OverlayWalkthroughModel, selectedStep: OverlayStep, direction: -1 | 1): string {
+  const nextIndex = Math.min(model.steps.length - 1, Math.max(0, stepIndex(model, selectedStep) + direction));
+  return model.steps[nextIndex]?.id ?? selectedStep.id;
+}
+
+function naturalDisplayTitle(value: string): string {
+  return value
+    .replace(/\bexecutive pattern\b/gi, "career context")
+    .replace(/\bstrategic signal\b/gi, "relevant signal")
+    .replace(/\bleadership archetype\b/gi, "leadership experience")
+    .replace(/\bfit vector\b/gi, "fit")
+    .replace(/\bproof point\b/gi, "evidence")
+    .replace(/\bmental model\b/gi, "starting point");
+}
+
+function displayDetailBlocks(step: OverlayStep): OverlayDetailBlock[] {
+  if (step.detailBlocks?.length) return step.detailBlocks.filter((block) => block.title || block.body);
+  return [
+    { title: "Why this matters", body: step.whyItMatters, kind: "standard" },
+    { title: "How this connects", body: step.fitLanguage, kind: "standard" },
+    { title: "Where to be careful", body: step.caveat, kind: "caveat" }
+  ].filter((block) => block.body.trim()) as OverlayDetailBlock[];
 }
 
 function Insight({ title, body, variant = "" }: { title: string; body: string; variant?: string }) {
@@ -807,8 +882,9 @@ function loadState(): StudioState {
 }
 
 function migrateWalkthrough(walkthrough: OverlayWalkthroughModel): OverlayWalkthroughModel {
-  if (walkthrough.polishedResume) return walkthrough;
-  return {
+  const migrated = walkthrough.polishedResume
+    ? walkthrough
+    : {
     ...walkthrough,
     polishedResume: {
       name: walkthrough.candidateName ?? "",
@@ -817,6 +893,13 @@ function migrateWalkthrough(walkthrough: OverlayWalkthroughModel): OverlayWalkth
       summary: walkthrough.resumeBrief ?? "",
       sections: []
     }
+  };
+  return {
+    ...migrated,
+    steps: migrated.steps.map((step) => ({
+      ...step,
+      detailBlocks: displayDetailBlocks(step)
+    }))
   };
 }
 
@@ -841,6 +924,29 @@ function createManualWalkthrough(step: OverlayStep): OverlayWalkthroughModel {
     steps: [step],
     closingNote: ""
   };
+}
+
+function serializeDetailBlocks(step: OverlayStep): string {
+  return displayDetailBlocks(step)
+    .map((block) => `${block.kind === "caveat" ? "Caveat - " : ""}${block.title}: ${block.body}`.trim())
+    .join("\n");
+}
+
+function parseDetailBlocks(text: string): OverlayDetailBlock[] {
+  const blocks = text
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const caveat = /^caveat\s*[-:]/i.test(line);
+      const cleaned = line.replace(/^caveat\s*[-:]\s*/i, "");
+      const separator = cleaned.indexOf(":");
+      const title = separator >= 0 ? cleaned.slice(0, separator).trim() : "Note";
+      const body = separator >= 0 ? cleaned.slice(separator + 1).trim() : cleaned;
+      return { title: title || "Note", body, kind: caveat ? "caveat" : "standard" } satisfies OverlayDetailBlock;
+    });
+  return blocks.length ? blocks : [{ title: "Needs editing", body: "", kind: "caveat" }];
 }
 
 function activeApiKey(state: StudioState): string {

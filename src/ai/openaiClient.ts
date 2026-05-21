@@ -3,6 +3,7 @@ import { overlayStepSchema, overlayWalkthroughSchema } from "./overlaySchema";
 import type {
   LlmGenerateRequest,
   LlmReviseStepRequest,
+  OverlayDetailBlock,
   OverlayStep,
   OverlayWalkthroughModel,
   PolishedResume,
@@ -190,25 +191,73 @@ function extractClaudeToolInput(response: unknown, toolName: string): unknown {
 }
 
 function normalizeWalkthrough(value: unknown): OverlayWalkthroughModel {
-  if (!isRecord(value) || !Array.isArray(value.steps)) {
-    throw new Error("The model did not return a valid walkthrough.");
+  const source = unwrapWalkthrough(value);
+  if (!isRecord(source)) {
+    throw new Error("Generation returned empty structured output. Regenerate with a current model or try a shorter input.");
   }
 
-  const fallbackResume = createFallbackPolishedResume(value);
+  const rawSteps = firstArray(source.steps, source.walkthroughSteps, source.tourSteps);
+  const normalizedSteps = rawSteps.length ? rawSteps.map((step, index) => normalizeStep(step, index)) : createFallbackSteps(source);
+  const fallbackResume = createFallbackPolishedResume(source);
   return {
-    candidateName: stringField(value.candidateName) || fallbackResume.name,
-    candidateHeadline: stringField(value.candidateHeadline) || fallbackResume.headline,
-    polishedResume: normalizePolishedResume(value.polishedResume, fallbackResume),
-    targetTitle: stringField(value.targetTitle),
-    targetOrganization: stringField(value.targetOrganization),
-    reviewerIntro: stringField(value.reviewerIntro),
-    resumeBrief: stringField(value.resumeBrief),
-    roleBrief: stringField(value.roleBrief),
-    strongestSignals: arrayOfStrings(value.strongestSignals),
-    gaps: arrayOfStrings(value.gaps),
-    steps: value.steps.map((step, index) => normalizeStep(step, index)),
-    closingNote: stringField(value.closingNote)
+    candidateName: stringField(source.candidateName) || fallbackResume.name,
+    candidateHeadline: stringField(source.candidateHeadline) || fallbackResume.headline,
+    polishedResume: normalizePolishedResume(source.polishedResume, fallbackResume),
+    targetTitle: stringField(source.targetTitle),
+    targetOrganization: stringField(source.targetOrganization),
+    reviewerIntro: stringField(source.reviewerIntro),
+    resumeBrief: stringField(source.resumeBrief),
+    roleBrief: stringField(source.roleBrief),
+    strongestSignals: arrayOfStrings(source.strongestSignals),
+    gaps: arrayOfStrings(source.gaps),
+    steps: normalizedSteps,
+    closingNote: stringField(source.closingNote)
   };
+}
+
+function unwrapWalkthrough(value: unknown): unknown {
+  if (!isRecord(value)) return value;
+  const candidates = [
+    value,
+    value.walkthrough,
+    value.model,
+    value.data,
+    value.result,
+    value.generatedResumeWalkthrough,
+    value.resumeWalkthrough,
+    value.output
+  ];
+  return candidates.find((candidate) => isRecord(candidate) && (Array.isArray(candidate.steps) || Array.isArray(candidate.walkthroughSteps))) ?? value;
+}
+
+function firstArray(...values: unknown[]): unknown[] {
+  const value = values.find(Array.isArray);
+  return Array.isArray(value) ? value : [];
+}
+
+function createFallbackSteps(value: Record<string, unknown>): OverlayStep[] {
+  const title = stringField(value.targetTitle) || "the role";
+  return [
+    {
+      id: "step-1",
+      title: "Start with the source material",
+      eyebrow: "Step 1",
+      narrative: "Generation returned a partial structure, so this step is intentionally conservative. Review the resume text and add the strongest supported point here.",
+      detailBlocks: [
+        {
+          title: "What to verify",
+          body: "The walkthrough should only claim what the resume or supplied background can support.",
+          kind: "caveat"
+        }
+      ],
+      evidenceQuote: "Needs source evidence",
+      whyItMatters: "The walkthrough should only claim what the resume or supplied background can support.",
+      fitLanguage: `Use this step to explain the clearest source-backed connection to ${title}.`,
+      caveat: "This step needs review because generation did not return a complete walkthrough.",
+      confidence: "needs confirmation",
+      resumeAnchor: ""
+    }
+  ];
 }
 
 function normalizePolishedResume(value: unknown, fallback: PolishedResume): PolishedResume {
@@ -246,15 +295,28 @@ function createFallbackPolishedResume(value: Record<string, unknown>): PolishedR
 
 function normalizeStep(value: unknown, index = 0): OverlayStep {
   if (!isRecord(value)) {
-    throw new Error("The model did not return a valid step.");
+    return createFallbackSteps({})[0] ?? {
+      id: `step-${index + 1}`,
+      title: `Fit point ${index + 1}`,
+      eyebrow: `Step ${index + 1}`,
+      narrative: "",
+      detailBlocks: [{ title: "Needs editing", body: "", kind: "caveat" }],
+      evidenceQuote: "Needs source evidence",
+      whyItMatters: "",
+      fitLanguage: "",
+      caveat: "",
+      confidence: "needs confirmation",
+      resumeAnchor: ""
+    };
   }
 
   const confidence = stringField(value.confidence);
   return {
     id: stringField(value.id) || `step-${index + 1}`,
-    title: stringField(value.title),
-    eyebrow: stringField(value.eyebrow),
+    title: naturalTitle(stringField(value.title), index),
+    eyebrow: naturalEyebrow(stringField(value.eyebrow), index),
     narrative: stringField(value.narrative),
+    detailBlocks: normalizeDetailBlocks(value.detailBlocks, value),
     evidenceQuote: stringField(value.evidenceQuote) || "Needs source evidence",
     whyItMatters: stringField(value.whyItMatters),
     fitLanguage: stringField(value.fitLanguage),
@@ -262,6 +324,53 @@ function normalizeStep(value: unknown, index = 0): OverlayStep {
     confidence: confidence === "high" || confidence === "medium" || confidence === "low" || confidence === "needs confirmation" ? confidence : "needs confirmation",
     resumeAnchor: stringField(value.resumeAnchor)
   };
+}
+
+function normalizeDetailBlocks(value: unknown, legacy: Record<string, unknown>): OverlayDetailBlock[] {
+  if (Array.isArray(value)) {
+    const blocks = value
+      .filter(isRecord)
+      .map((block) => ({
+        title: naturalDetailTitle(stringField(block.title)),
+        body: stringField(block.body),
+        kind: stringField(block.kind) === "caveat" ? ("caveat" as const) : ("standard" as const)
+      }))
+      .filter((block) => block.title || block.body);
+    if (blocks.length) return blocks;
+  }
+
+  return [
+    { title: "Why this matters", body: stringField(legacy.whyItMatters), kind: "standard" as const },
+    { title: "How this connects", body: stringField(legacy.fitLanguage), kind: "standard" as const },
+    { title: "Where to be careful", body: stringField(legacy.caveat), kind: "caveat" as const }
+  ].filter((block) => block.body.trim());
+}
+
+function naturalTitle(value: string, index: number): string {
+  const trimmed = value.trim();
+  if (!trimmed) return `Fit point ${index + 1}`;
+  return trimmed
+    .replace(/\bexecutive pattern\b/gi, "career context")
+    .replace(/\bstrategic signal\b/gi, "relevant signal")
+    .replace(/\bleadership archetype\b/gi, "leadership experience")
+    .replace(/\bfit vector\b/gi, "fit")
+    .replace(/\bproof point\b/gi, "evidence")
+    .replace(/\bmental model\b/gi, "starting point");
+}
+
+function naturalEyebrow(value: string, index: number): string {
+  const trimmed = value.trim();
+  if (!trimmed) return `Step ${index + 1}`;
+  if (/\b(executive pattern|strategic signal|leadership archetype|fit vector|proof point|mental model)\b/i.test(trimmed)) {
+    return `Step ${index + 1}`;
+  }
+  return trimmed;
+}
+
+function naturalDetailTitle(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "Note";
+  return naturalTitle(trimmed, 0).replace(/^Fit point 1$/, "Note");
 }
 
 function getApiError(value: unknown): string {

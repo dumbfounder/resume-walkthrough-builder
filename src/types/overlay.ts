@@ -4,8 +4,9 @@ export interface StudioInputs {
   targetText: string;
   guidanceText: string;
   resumeStyleDirection: string;
+  walkthroughTechniquePrompt: string;
+  continuityPrompt: string;
   verbosity: "tight" | "balanced" | "detailed" | "deep";
-  resumePolish: "light cleanup" | "executive rewrite" | "technical rewrite";
 }
 
 export interface PolishedResumeSection {
@@ -21,11 +22,18 @@ export interface PolishedResume {
   sections: PolishedResumeSection[];
 }
 
+export interface OverlayDetailBlock {
+  title: string;
+  body: string;
+  kind: "standard" | "caveat";
+}
+
 export interface OverlayStep {
   id: string;
   title: string;
   eyebrow: string;
   narrative: string;
+  detailBlocks: OverlayDetailBlock[];
   evidenceQuote: string;
   whyItMatters: string;
   fitLanguage: string;

@@ -7,8 +7,9 @@ The builder takes:
 - real resume text
 - free-form background/context about the candidate
 - a job description, platform memo, or role description
-- optional direction about the resume's look and feel
-- optional direction about walkthrough tone and emphasis
+- a resume design prompt
+- a walkthrough technique prompt
+- a continuity prompt for the step-by-step story
 
 It uses an LLM to draft a guided walkthrough, lets you edit every step directly or by prompting, then exports one standalone HTML file that can be opened locally by double-clicking.
 
@@ -34,15 +35,16 @@ Choose OpenAI or Claude in the app and paste the matching API key. Keys are used
 - Claude options: `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`.
 - OpenAI options: `gpt-5.5`, `gpt-5.5-pro`, `gpt-5.4`, `gpt-5.4-pro`, `gpt-5.4-mini`, `gpt-5.4-nano`.
 - Verbosity controls how much detail the walkthrough uses.
-- Resume polish controls whether the input resume gets light cleanup, an executive rewrite, or a technical rewrite.
-- Resume look-and-feel direction controls the resume structure, density, hierarchy, and visual tone used by the full regeneration.
+- Resume design prompt controls the resume structure, density, hierarchy, and visual tone used by the full regeneration.
+- Walkthrough technique prompt controls how the overlay teaches the resume, such as guided annotation, product tour, board memo, objection handling, or technical deep dive.
+- Continuity prompt gives the LLM a throughline to maintain across steps.
 
 ## Workflow
 
 1. Paste the actual resume.
 2. Paste any other free-form context about the candidate.
 3. Paste the target role or platform description.
-4. Choose provider, verbosity, resume polish level, and resume look-and-feel direction.
+4. Choose provider and verbosity, then write the resume design, walkthrough technique, and continuity prompts.
 5. Generate or regenerate everything.
 6. Edit the polished resume and each overlay step directly.
 7. Prompt the LLM to revise a selected step, or use Regenerate everything to rebuild the polished resume and full tour.
