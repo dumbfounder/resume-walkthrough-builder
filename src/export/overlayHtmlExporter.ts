@@ -154,6 +154,17 @@ button { font: inherit; }
   text-align: right;
   font-size: 14px;
 }
+.resume-contact {
+  margin: -8px 0 18px;
+  color: var(--muted);
+  font-size: 13px;
+}
+.resume-summary {
+  margin: 0 0 22px;
+  color: #303942;
+  font-size: 15px;
+  line-height: 1.52;
+}
 .resume-section {
   margin-top: 20px;
 }
@@ -485,6 +496,11 @@ function exportJs(): string {
     if (contextLines.length) sections.push({ heading: "Additional Context", lines: contextLines });
     return sections;
   }
+  function resumeSections() {
+    const polished = model.polishedResume || {};
+    if (Array.isArray(polished.sections) && polished.sections.length) return polished.sections;
+    return parseSections(data.resumeText, data.aboutText);
+  }
   function normalize(value) {
     return String(value || "").toLowerCase().replace(/[^a-z0-9+#.]+/g, " ").replace(/\\s+/g, " ").trim();
   }
@@ -513,7 +529,7 @@ function exportJs(): string {
     return "<mark>" + escaped + "</mark>";
   }
   function renderResume(step) {
-    const sections = parseSections(data.resumeText, data.aboutText);
+    const sections = resumeSections();
     const query = focusQuery(step);
     const hasFocus = sections.some(section => section.lines.some(line => lineMatches(line, query)));
     if (!sections.length) return '<p class="empty-resume">No resume text was embedded.</p>';
@@ -541,7 +557,9 @@ function exportJs(): string {
         '</div>' +
         '<section class="resume-stage">' +
           '<article class="resume-document">' +
-            '<header class="resume-head"><div><p>Resume</p><h1>' + esc(model.candidateName || "Candidate") + '</h1></div><span>' + esc(model.candidateHeadline || model.targetTitle || "Interactive walkthrough") + '</span></header>' +
+            '<header class="resume-head"><div><p>Resume</p><h1>' + esc((model.polishedResume && model.polishedResume.name) || model.candidateName || "Candidate") + '</h1></div><span>' + esc((model.polishedResume && model.polishedResume.headline) || model.candidateHeadline || model.targetTitle || "Interactive walkthrough") + '</span></header>' +
+            ((model.polishedResume && model.polishedResume.contactLine) ? '<p class="resume-contact">' + esc(model.polishedResume.contactLine) + '</p>' : '') +
+            ((model.polishedResume && model.polishedResume.summary) ? '<p class="resume-summary">' + esc(model.polishedResume.summary) + '</p>' : '') +
             renderResume(step) +
           '</article>' +
           renderLaunchNote() +

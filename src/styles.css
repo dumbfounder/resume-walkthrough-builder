@@ -190,10 +190,15 @@ label {
 }
 
 .api-row,
+.provider-grid,
 .brief-fields {
   display: grid;
   grid-template-columns: minmax(0, 1.4fr) minmax(120px, .6fr);
   gap: 10px;
+}
+
+.provider-grid {
+  grid-template-columns: 1fr 1fr 1fr;
 }
 
 .brief-fields label:last-child {
@@ -377,6 +382,19 @@ label {
   color: var(--muted);
   text-align: right;
   font-size: 14px;
+}
+
+.resume-contact {
+  margin: -8px 0 18px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.resume-summary {
+  margin: 0 0 22px;
+  color: #303942;
+  font-size: 15px;
+  line-height: 1.52;
 }
 
 .resume-section-block {
@@ -580,6 +598,7 @@ label {
   }
 
   .api-row,
+  .provider-grid,
   .brief-fields {
     grid-template-columns: 1fr;
   }

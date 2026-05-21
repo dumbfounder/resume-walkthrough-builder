@@ -3,6 +3,21 @@ export interface StudioInputs {
   aboutText: string;
   targetText: string;
   guidanceText: string;
+  verbosity: "tight" | "balanced" | "detailed" | "deep";
+  resumePolish: "light cleanup" | "executive rewrite" | "technical rewrite";
+}
+
+export interface PolishedResumeSection {
+  heading: string;
+  lines: string[];
+}
+
+export interface PolishedResume {
+  name: string;
+  headline: string;
+  contactLine: string;
+  summary: string;
+  sections: PolishedResumeSection[];
 }
 
 export interface OverlayStep {
@@ -21,6 +36,7 @@ export interface OverlayStep {
 export interface OverlayWalkthroughModel {
   candidateName: string;
   candidateHeadline: string;
+  polishedResume: PolishedResume;
   targetTitle: string;
   targetOrganization: string;
   reviewerIntro: string;
@@ -33,7 +49,9 @@ export interface OverlayWalkthroughModel {
 }
 
 export interface StudioState {
-  apiKey: string;
+  provider: "openai" | "anthropic";
+  openaiApiKey: string;
+  anthropicApiKey: string;
   model: string;
   saveKey: boolean;
   inputs: StudioInputs;
@@ -47,12 +65,14 @@ export interface StudioState {
 }
 
 export interface LlmGenerateRequest {
+  provider: StudioState["provider"];
   apiKey: string;
   model: string;
   inputs: StudioInputs;
 }
 
 export interface LlmReviseStepRequest {
+  provider: StudioState["provider"];
   apiKey: string;
   model: string;
   inputs: StudioInputs;

@@ -1,20 +1,24 @@
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
 import { generateOverlayWalkthrough, reviseOverlayStep } from "./ai/openaiClient";
 import { buildOverlayHtml } from "./export/overlayHtmlExporter";
-import type { OverlayStep, OverlayWalkthroughModel, StudioInputs, StudioState } from "./types/overlay";
+import type { OverlayStep, OverlayWalkthroughModel, PolishedResume, StudioInputs, StudioState } from "./types/overlay";
 
 const STORAGE_KEY = "resume-overlay-studio:v2";
-const KEY_STORAGE_KEY = "resume-overlay-studio:openai-key";
+const KEY_STORAGE_KEY = "resume-overlay-studio:provider-keys";
 
 const emptyInputs: StudioInputs = {
   resumeText: "",
   aboutText: "",
   targetText: "",
-  guidanceText: ""
+  guidanceText: "",
+  verbosity: "balanced",
+  resumePolish: "executive rewrite"
 };
 
 const emptyState: StudioState = {
-  apiKey: "",
+  provider: "openai",
+  openaiApiKey: "",
+  anthropicApiKey: "",
   model: "gpt-5.5",
   saveKey: false,
   inputs: emptyInputs,
@@ -32,10 +36,10 @@ export default function App() {
   const [revisionPrompt, setRevisionPrompt] = useState("");
 
   useEffect(() => {
-    const { apiKey: _apiKey, ...persistable } = state;
+    const { openaiApiKey: _openaiApiKey, anthropicApiKey: _anthropicApiKey, ...persistable } = state;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(persistable));
-    if (state.saveKey && state.apiKey.trim()) {
-      localStorage.setItem(KEY_STORAGE_KEY, state.apiKey);
+    if (state.saveKey) {
+      localStorage.setItem(KEY_STORAGE_KEY, JSON.stringify({ openai: state.openaiApiKey, anthropic: state.anthropicApiKey }));
     }
     if (!state.saveKey) {
       localStorage.removeItem(KEY_STORAGE_KEY);
@@ -55,7 +59,8 @@ export default function App() {
     setState((current) => ({ ...current, isGenerating: true, error: "", status: "Generating a polished overlay walkthrough..." }));
     try {
       const walkthrough = await generateOverlayWalkthrough({
-        apiKey: state.apiKey,
+        provider: state.provider,
+        apiKey: activeApiKey(state),
         model: state.model,
         inputs: state.inputs
       });
@@ -82,7 +87,8 @@ export default function App() {
     setState((current) => ({ ...current, isRevising: true, error: "", status: "Revising the selected overlay step..." }));
     try {
       const revisedStep = await reviseOverlayStep({
-        apiKey: state.apiKey,
+        provider: state.provider,
+        apiKey: activeApiKey(state),
         model: state.model,
         inputs: state.inputs,
         walkthrough: state.walkthrough,
@@ -197,7 +203,14 @@ export default function App() {
 
   function reset() {
     localStorage.removeItem(STORAGE_KEY);
-    setState({ ...emptyState, apiKey: state.saveKey ? state.apiKey : "", saveKey: state.saveKey });
+    setState({
+      ...emptyState,
+      provider: state.provider,
+      model: defaultModelForProvider(state.provider),
+      openaiApiKey: state.saveKey ? state.openaiApiKey : "",
+      anthropicApiKey: state.saveKey ? state.anthropicApiKey : "",
+      saveKey: state.saveKey
+    });
     setRevisionPrompt("");
   }
 
@@ -295,14 +308,52 @@ function ComposePanel({
 }) {
   return (
     <div className="compose-stack">
+      <div className="provider-grid">
+        <label>
+          Provider
+          <select
+            value={state.provider}
+            onChange={(event) => {
+              const provider = event.target.value as StudioState["provider"];
+              onStateChange((current) => ({ ...current, provider, model: defaultModelForProvider(provider) }));
+            }}
+          >
+            <option value="openai">OpenAI</option>
+            <option value="anthropic">Claude</option>
+          </select>
+        </label>
+        <label>
+          Verbosity
+          <select value={state.inputs.verbosity} onChange={(event) => onInputChange({ verbosity: event.target.value as StudioInputs["verbosity"] })}>
+            <option value="tight">Tight</option>
+            <option value="balanced">Balanced</option>
+            <option value="detailed">Detailed</option>
+            <option value="deep">Deep walkthrough</option>
+          </select>
+        </label>
+        <label>
+          Resume polish
+          <select value={state.inputs.resumePolish} onChange={(event) => onInputChange({ resumePolish: event.target.value as StudioInputs["resumePolish"] })}>
+            <option value="light cleanup">Light cleanup</option>
+            <option value="executive rewrite">Executive rewrite</option>
+            <option value="technical rewrite">Technical rewrite</option>
+          </select>
+        </label>
+      </div>
       <div className="api-row">
         <label>
-          OpenAI API key
+          {state.provider === "anthropic" ? "Anthropic API key" : "OpenAI API key"}
           <input
             type="password"
-            value={state.apiKey}
-            onChange={(event) => onStateChange((current) => ({ ...current, apiKey: event.target.value }))}
-            placeholder="sk-..."
+            value={activeApiKey(state)}
+            onChange={(event) =>
+              onStateChange((current) =>
+                current.provider === "anthropic"
+                  ? { ...current, anthropicApiKey: event.target.value }
+                  : { ...current, openaiApiKey: event.target.value }
+              )
+            }
+            placeholder={state.provider === "anthropic" ? "sk-ant-..." : "sk-..."}
           />
         </label>
         <label>
@@ -432,6 +483,14 @@ function EditPanel({
         <label>
           Reviewer intro
           <textarea value={walkthrough.reviewerIntro} onChange={(event) => onWalkthroughChange({ reviewerIntro: event.target.value })} rows={3} />
+        </label>
+        <label>
+          Polished resume used in export
+          <textarea
+            value={serializePolishedResume(walkthrough)}
+            onChange={(event) => onWalkthroughChange({ polishedResume: parsePolishedResumeText(event.target.value, walkthrough) })}
+            rows={10}
+          />
         </label>
       </div>
 
@@ -603,7 +662,7 @@ function Insight({ title, body, variant = "" }: { title: string; body: string; v
 }
 
 function ResumeDocument({ model, inputs, selectedStep }: { model: OverlayWalkthroughModel; inputs: StudioInputs; selectedStep: OverlayStep }) {
-  const sections = buildResumeSections(inputs.resumeText, inputs.aboutText);
+  const sections = buildResumeSections(model, inputs);
   const query = normalizedFocusQuery(selectedStep);
   const hasFocus = sections.some((section) => section.lines.some((line) => lineMatchesFocus(line, query)));
 
@@ -612,10 +671,12 @@ function ResumeDocument({ model, inputs, selectedStep }: { model: OverlayWalkthr
       <header className="resume-head">
         <div>
           <p>Resume</p>
-          <h2>{model.candidateName || "Candidate"}</h2>
+          <h2>{model.polishedResume.name || model.candidateName || "Candidate"}</h2>
         </div>
-        <span>{model.candidateHeadline || model.targetTitle || "Interactive walkthrough"}</span>
+        <span>{model.polishedResume.headline || model.candidateHeadline || model.targetTitle || "Interactive walkthrough"}</span>
       </header>
+      {model.polishedResume.contactLine && <p className="resume-contact">{model.polishedResume.contactLine}</p>}
+      {model.polishedResume.summary && <p className="resume-summary">{model.polishedResume.summary}</p>}
       {sections.length === 0 && <p className="empty-resume-text">Paste resume text to build the walkthrough canvas.</p>}
       {sections.map((section, sectionIndex) => (
         <section className="resume-section-block" key={`${section.heading}-${sectionIndex}`}>
@@ -636,15 +697,19 @@ function ResumeDocument({ model, inputs, selectedStep }: { model: OverlayWalkthr
 function loadState(): StudioState {
   try {
     const saved = localStorage.getItem(STORAGE_KEY);
-    const savedKey = localStorage.getItem(KEY_STORAGE_KEY) || "";
-    if (!saved) return { ...emptyState, apiKey: savedKey, saveKey: Boolean(savedKey) };
+    const savedKeys = readSavedKeys();
+    if (!saved) return { ...emptyState, ...savedKeys, saveKey: Boolean(savedKeys.openaiApiKey || savedKeys.anthropicApiKey) };
     const parsed = JSON.parse(saved) as Partial<StudioState>;
+    const provider = parsed.provider ?? "openai";
     return {
       ...emptyState,
       ...parsed,
-      apiKey: savedKey,
-      saveKey: Boolean(savedKey),
+      ...savedKeys,
+      provider,
+      model: parsed.model || defaultModelForProvider(provider),
+      saveKey: Boolean(savedKeys.openaiApiKey || savedKeys.anthropicApiKey),
       inputs: { ...emptyInputs, ...(parsed.inputs ?? {}) },
+      walkthrough: parsed.walkthrough ? migrateWalkthrough(parsed.walkthrough) : null,
       isGenerating: false,
       isRevising: false,
       error: ""
@@ -654,10 +719,31 @@ function loadState(): StudioState {
   }
 }
 
+function migrateWalkthrough(walkthrough: OverlayWalkthroughModel): OverlayWalkthroughModel {
+  if (walkthrough.polishedResume) return walkthrough;
+  return {
+    ...walkthrough,
+    polishedResume: {
+      name: walkthrough.candidateName ?? "",
+      headline: walkthrough.candidateHeadline ?? "",
+      contactLine: "",
+      summary: walkthrough.resumeBrief ?? "",
+      sections: []
+    }
+  };
+}
+
 function createManualWalkthrough(step: OverlayStep): OverlayWalkthroughModel {
   return {
     candidateName: "",
     candidateHeadline: "",
+    polishedResume: {
+      name: "",
+      headline: "",
+      contactLine: "",
+      summary: "",
+      sections: []
+    },
     targetTitle: "",
     targetOrganization: "",
     reviewerIntro: "",
@@ -670,17 +756,74 @@ function createManualWalkthrough(step: OverlayStep): OverlayWalkthroughModel {
   };
 }
 
+function activeApiKey(state: StudioState): string {
+  return state.provider === "anthropic" ? state.anthropicApiKey : state.openaiApiKey;
+}
+
+function defaultModelForProvider(provider: StudioState["provider"]): string {
+  return provider === "anthropic" ? "claude-sonnet-4-5" : "gpt-5.5";
+}
+
+function readSavedKeys(): Pick<StudioState, "openaiApiKey" | "anthropicApiKey"> {
+  const raw = localStorage.getItem(KEY_STORAGE_KEY);
+  if (!raw) return { openaiApiKey: "", anthropicApiKey: "" };
+  try {
+    const parsed = JSON.parse(raw) as { openai?: string; anthropic?: string };
+    return { openaiApiKey: parsed.openai ?? "", anthropicApiKey: parsed.anthropic ?? "" };
+  } catch {
+    return { openaiApiKey: raw, anthropicApiKey: "" };
+  }
+}
+
+function serializePolishedResume(walkthrough: OverlayWalkthroughModel): string {
+  const resume = walkthrough.polishedResume;
+  return [
+    resume.name,
+    resume.headline,
+    resume.contactLine,
+    "",
+    "SUMMARY",
+    resume.summary,
+    "",
+    ...resume.sections.flatMap((section) => [section.heading.toUpperCase(), ...section.lines, ""])
+  ]
+    .join("\n")
+    .trim();
+}
+
+function parsePolishedResumeText(text: string, walkthrough: OverlayWalkthroughModel): PolishedResume {
+  const lines = text.replace(/\r/g, "").split("\n");
+  const name = lines[0]?.trim() ?? "";
+  const headline = lines[1]?.trim() ?? "";
+  const contactLine = lines[2]?.trim() ?? "";
+  const body = lines.slice(3).join("\n").trim();
+  const parsedSections = parseResumeLikeText(body);
+  const summarySection = parsedSections.find((section) => /^summary$/i.test(section.heading));
+  const summary = summarySection?.lines.join(" ") || walkthrough.polishedResume.summary;
+  const sections = parsedSections.filter((section) => !/^summary$/i.test(section.heading));
+
+  return {
+    name,
+    headline,
+    contactLine,
+    summary,
+    sections
+  };
+}
+
 interface ResumeSection {
   heading: string;
   lines: string[];
 }
 
-function buildResumeSections(resumeText: string, aboutText: string): ResumeSection[] {
-  const sections = parseResumeLikeText(resumeText);
-  if (aboutText.trim()) {
+function buildResumeSections(model: OverlayWalkthroughModel, inputs: StudioInputs): ResumeSection[] {
+  const polishedSections = model.polishedResume.sections.filter((section) => section.heading || section.lines.length);
+  if (polishedSections.length) return polishedSections;
+  const sections = parseResumeLikeText(inputs.resumeText);
+  if (inputs.aboutText.trim()) {
     sections.push({
       heading: "Additional Context",
-      lines: aboutText
+      lines: inputs.aboutText
         .split(/\n+/)
         .map((line) => line.trim())
         .filter(Boolean)

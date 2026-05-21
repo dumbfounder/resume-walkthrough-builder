@@ -22,21 +22,25 @@ Open the Vite URL shown in the terminal.
 
 ## LLM Generation
 
-Paste an OpenAI API key in the app. The key is used by a local Vite proxy at `/api/openai-responses` so the browser can generate via the Responses API without adding a backend project.
+Choose OpenAI or Claude in the app and paste the matching API key. Keys are used by local Vite proxies so the browser can generate without adding a backend project.
 
+- OpenAI proxy: `/api/openai-responses`
+- Claude proxy: `/api/anthropic-messages`
 - No API key is stored in source.
 - The key is not included in exported HTML.
 - If `Save key in this browser only` is checked, it is saved in localStorage on this machine.
 - The default model is editable.
+- Verbosity controls how much detail the walkthrough uses.
+- Resume polish controls whether the input resume gets light cleanup, an executive rewrite, or a technical rewrite.
 
 ## Workflow
 
 1. Paste the actual resume.
 2. Paste any other free-form context about the candidate.
 3. Paste the target role or platform description.
-4. Add direction for the walkthrough.
+4. Choose provider, verbosity, and resume polish level.
 5. Generate.
-6. Edit each overlay step directly.
+6. Edit the polished resume and each overlay step directly.
 7. Or prompt the LLM to revise a selected step.
 8. Preview the exact overlay experience.
 9. Export one standalone HTML file.

@@ -30,12 +30,40 @@ export const overlayStepSchema = {
   ]
 } as const;
 
+export const polishedResumeSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    name: { type: "string" },
+    headline: { type: "string" },
+    contactLine: { type: "string" },
+    summary: { type: "string" },
+    sections: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          heading: { type: "string" },
+          lines: {
+            type: "array",
+            items: { type: "string" }
+          }
+        },
+        required: ["heading", "lines"]
+      }
+    }
+  },
+  required: ["name", "headline", "contactLine", "summary", "sections"]
+} as const;
+
 export const overlayWalkthroughSchema = {
   type: "object",
   additionalProperties: false,
   properties: {
     candidateName: { type: "string" },
     candidateHeadline: { type: "string" },
+    polishedResume: polishedResumeSchema,
     targetTitle: { type: "string" },
     targetOrganization: { type: "string" },
     reviewerIntro: { type: "string" },
@@ -60,6 +88,7 @@ export const overlayWalkthroughSchema = {
   required: [
     "candidateName",
     "candidateHeadline",
+    "polishedResume",
     "targetTitle",
     "targetOrganization",
     "reviewerIntro",
