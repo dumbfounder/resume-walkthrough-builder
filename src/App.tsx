@@ -558,47 +558,37 @@ function OverlayPreview({
 
   return (
     <div className="artifact-frame">
-      <aside className="artifact-resume">
-        <article>
-          <h2>{model.candidateName || "Resume"}</h2>
-          <p>{model.candidateHeadline}</p>
-          <h3>Resume source</h3>
-          <div className="resume-source" dangerouslySetInnerHTML={{ __html: markEvidence(inputs.resumeText, selectedStep.evidenceQuote) }} />
-          {inputs.aboutText && (
-            <>
-              <h3>Additional context</h3>
-              <div className="resume-source" dangerouslySetInnerHTML={{ __html: markEvidence(inputs.aboutText, selectedStep.evidenceQuote) }} />
-            </>
-          )}
-        </article>
-      </aside>
-      <section className="artifact-overlay">
-        <header>
-          <span>Resume Walkthrough</span>
-          <strong>{model.targetTitle || "Target role"}</strong>
-        </header>
-        <article className="overlay-card">
-          <div className="overlay-kicker">
+      <div className="artifact-toolbar">
+        <span>Resume walkthrough preview</span>
+        <strong>{model.targetTitle || "Target role"}</strong>
+      </div>
+      <div className="resume-tour-canvas">
+        <ResumeDocument model={model} inputs={inputs} selectedStep={selectedStep} />
+        <article className="tour-popover">
+          <div className="tour-kicker">
             <span>{selectedStep.eyebrow}</span>
             <em>{selectedStep.confidence}</em>
           </div>
           <h2>{selectedStep.title}</h2>
-          <p className="overlay-narrative">{selectedStep.narrative}</p>
-          <div className="overlay-grid">
-            <Insight title="Source evidence" body={selectedStep.evidenceQuote} variant="quote" />
-            <Insight title="Why it matters" body={selectedStep.whyItMatters} />
+          <p className="tour-narrative">{selectedStep.narrative}</p>
+          <div className="tour-insights">
+            <Insight title="Why this matters" body={selectedStep.whyItMatters} />
             <Insight title="How this maps to the role" body={selectedStep.fitLanguage} />
-            <Insight title="Caveat" body={selectedStep.caveat} variant="caveat" />
+            {selectedStep.caveat && <Insight title="Caveat" body={selectedStep.caveat} variant="caveat" />}
           </div>
+          <div className="tour-source">
+            <span>Highlighted source</span>
+            <p>{selectedStep.evidenceQuote}</p>
+          </div>
+          <nav className="artifact-dots">
+            {model.steps.map((step, index) => (
+              <button key={step.id} type="button" className={step.id === selectedStep.id ? "active" : ""} onClick={() => onSelectStep(step.id)}>
+                {index + 1}
+              </button>
+            ))}
+          </nav>
         </article>
-        <nav className="artifact-dots">
-          {model.steps.map((step, index) => (
-            <button key={step.id} type="button" className={step.id === selectedStep.id ? "active" : ""} onClick={() => onSelectStep(step.id)}>
-              {index + 1}
-            </button>
-          ))}
-        </nav>
-      </section>
+      </div>
     </div>
   );
 }
@@ -609,6 +599,37 @@ function Insight({ title, body, variant = "" }: { title: string; body: string; v
       <strong>{title}</strong>
       <p>{body}</p>
     </div>
+  );
+}
+
+function ResumeDocument({ model, inputs, selectedStep }: { model: OverlayWalkthroughModel; inputs: StudioInputs; selectedStep: OverlayStep }) {
+  const sections = buildResumeSections(inputs.resumeText, inputs.aboutText);
+  const query = normalizedFocusQuery(selectedStep);
+  const hasFocus = sections.some((section) => section.lines.some((line) => lineMatchesFocus(line, query)));
+
+  return (
+    <article className="resume-document">
+      <header className="resume-head">
+        <div>
+          <p>Resume</p>
+          <h2>{model.candidateName || "Candidate"}</h2>
+        </div>
+        <span>{model.candidateHeadline || model.targetTitle || "Interactive walkthrough"}</span>
+      </header>
+      {sections.length === 0 && <p className="empty-resume-text">Paste resume text to build the walkthrough canvas.</p>}
+      {sections.map((section, sectionIndex) => (
+        <section className="resume-section-block" key={`${section.heading}-${sectionIndex}`}>
+          {section.heading && <h3>{section.heading}</h3>}
+          {section.lines.map((line, lineIndex) => {
+            const isFocused = lineMatchesFocus(line, query);
+            const className = hasFocus ? (isFocused ? "resume-line focus" : "resume-line dim") : "resume-line";
+            return (
+              <p className={className} key={`${line}-${lineIndex}`} dangerouslySetInnerHTML={{ __html: highlightLine(line, query) }} />
+            );
+          })}
+        </section>
+      ))}
+    </article>
   );
 }
 
@@ -649,11 +670,89 @@ function createManualWalkthrough(step: OverlayStep): OverlayWalkthroughModel {
   };
 }
 
-function markEvidence(text: string, quote: string): string {
-  const source = escapeHtml(text || "");
-  const needle = quote.trim();
-  if (!needle || needle === "Needs source evidence") return source;
-  return source.replace(escapeHtml(needle), `<mark>${escapeHtml(needle)}</mark>`);
+interface ResumeSection {
+  heading: string;
+  lines: string[];
+}
+
+function buildResumeSections(resumeText: string, aboutText: string): ResumeSection[] {
+  const sections = parseResumeLikeText(resumeText);
+  if (aboutText.trim()) {
+    sections.push({
+      heading: "Additional Context",
+      lines: aboutText
+        .split(/\n+/)
+        .map((line) => line.trim())
+        .filter(Boolean)
+    });
+  }
+  return sections;
+}
+
+function parseResumeLikeText(text: string): ResumeSection[] {
+  const lines = text
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const sections: ResumeSection[] = [];
+  let current: ResumeSection = { heading: "", lines: [] };
+
+  lines.forEach((line, index) => {
+    if (isResumeHeading(line) && (index > 1 || current.lines.length > 2)) {
+      if (current.heading || current.lines.length) sections.push(current);
+      current = { heading: cleanHeading(line), lines: [] };
+      return;
+    }
+    current.lines.push(line);
+  });
+
+  if (current.heading || current.lines.length) sections.push(current);
+  return sections;
+}
+
+function isResumeHeading(line: string): boolean {
+  const clean = cleanHeading(line);
+  const known = /^(summary|profile|experience|professional experience|work experience|projects|selected projects|education|skills|technical skills|leadership|certifications|publications|awards)$/i;
+  return known.test(clean) || (/^[A-Z][A-Z\s/&+-]{2,}$/.test(line) && line.length < 42);
+}
+
+function cleanHeading(line: string): string {
+  return line.replace(/[:|]/g, "").replace(/\s+/g, " ").trim();
+}
+
+function normalizedFocusQuery(step: OverlayStep): string {
+  const quote = step.evidenceQuote.trim();
+  if (quote && quote !== "Needs source evidence") return quote;
+  return step.resumeAnchor.trim();
+}
+
+function lineMatchesFocus(line: string, query: string): boolean {
+  if (!query) return false;
+  const normalizedLine = normalizeForMatch(line);
+  const normalizedQuery = normalizeForMatch(query);
+  if (!normalizedQuery) return false;
+  if (normalizedLine.includes(normalizedQuery)) return true;
+  const queryWords = normalizedQuery.split(" ").filter((word) => word.length > 3);
+  if (queryWords.length < 3) return false;
+  return queryWords.filter((word) => normalizedLine.includes(word)).length >= Math.min(4, queryWords.length);
+}
+
+function highlightLine(line: string, query: string): string {
+  const escaped = escapeHtml(line);
+  if (!query || !lineMatchesFocus(line, query)) return escaped;
+  const exactIndex = line.toLowerCase().indexOf(query.toLowerCase());
+  if (exactIndex >= 0) {
+    const before = escapeHtml(line.slice(0, exactIndex));
+    const match = escapeHtml(line.slice(exactIndex, exactIndex + query.length));
+    const after = escapeHtml(line.slice(exactIndex + query.length));
+    return `${before}<mark>${match}</mark>${after}`;
+  }
+  return `<mark>${escaped}</mark>`;
+}
+
+function normalizeForMatch(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9+#.]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function escapeHtml(value: string): string {

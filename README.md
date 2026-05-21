@@ -49,9 +49,13 @@ The exported HTML includes:
 - embedded JavaScript
 - embedded structured JSON data
 - the supplied resume/context needed for the walkthrough
-- guided overlay mode
+- standard resume-first opening
+- automatic guided overlay reveal after 3 seconds
+- highlighted source text inside the resume
+- slightly dimmed non-focused resume text during the tour
 - fit brief mode
 - print CSS
+- a subtle note that the file was built with a custom resume tool in under a day
 
 The exported file has no external JS, no external CSS, no CDN dependency, no backend calls, and no API calls.
 

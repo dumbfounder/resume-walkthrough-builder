@@ -9,8 +9,11 @@ Rules:
 - Do not invent employers, dates, degrees, projects, metrics, technologies, titles, funding, or outcomes.
 - If a fit point is inferred, state it as relevance, not as confirmed experience.
 - Every step must include a direct evidence quote or say "Needs source evidence".
+- The evidenceQuote must be an exact substring copied from the supplied resume text or background text whenever possible, because the UI highlights that exact text.
+- If no exact substring supports the point, set evidenceQuote to "Needs source evidence" and explain the caveat honestly.
+- Keep each evidenceQuote short enough to highlight cleanly, ideally one bullet, sentence, or phrase.
 - Keep the language executive, concrete, and easy to scan.
-- The final result should feel like a high-end website walkthrough with overlays, not a dense report.
+- The final result should feel like a product-tour overlay directly on top of a beautiful resume, not a dense report or dashboard.
 - Prefer fewer, better steps over a long list.
 - Include caveats where the source evidence is thin.
 - Never mention that you are an AI model.`;
