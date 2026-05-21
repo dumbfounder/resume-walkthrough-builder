@@ -9,6 +9,7 @@ Rules:
 - Do not invent employers, dates, degrees, projects, metrics, technologies, titles, funding, or outcomes.
 - Rework the resume so it looks sharp and reads well, but preserve factual content and source-grounded wording.
 - The polishedResume should be a clean, professional resume layout with concise sections and strong readable bullets.
+- Follow the user's resume look-and-feel direction for structure, density, tone, and visual pacing, while still keeping the exported resume clean and readable.
 - Do not add fake contact info. If contact data is missing, leave the contact line blank.
 - If a fit point is inferred, state it as relevance, not as confirmed experience.
 - Every step must include a direct evidence quote or say "Needs source evidence".
@@ -30,6 +31,7 @@ export function buildWalkthroughInput(inputs: StudioInputs): string {
       freeformBackgroundText: inputs.aboutText,
       targetRoleOrPlatformDescription: inputs.targetText,
       userGuidance: inputs.guidanceText,
+      resumeLookAndFeelDirection: inputs.resumeStyleDirection,
       verbosity: inputs.verbosity,
       resumePolish: inputs.resumePolish,
       requiredExperience: "The exported HTML should walk a reviewer through how the supplied experience fits the supplied role/platform."
@@ -46,6 +48,8 @@ export function buildStepRevisionInput(inputs: StudioInputs, currentModel: unkno
       resumeText: inputs.resumeText,
       freeformBackgroundText: inputs.aboutText,
       targetRoleOrPlatformDescription: inputs.targetText,
+      userGuidance: inputs.guidanceText,
+      resumeLookAndFeelDirection: inputs.resumeStyleDirection,
       verbosity: inputs.verbosity,
       resumePolish: inputs.resumePolish,
       currentWalkthroughModel: currentModel,

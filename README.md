@@ -7,7 +7,8 @@ The builder takes:
 - real resume text
 - free-form background/context about the candidate
 - a job description, platform memo, or role description
-- optional direction about tone and emphasis
+- optional direction about the resume's look and feel
+- optional direction about walkthrough tone and emphasis
 
 It uses an LLM to draft a guided walkthrough, lets you edit every step directly or by prompting, then exports one standalone HTML file that can be opened locally by double-clicking.
 
@@ -32,16 +33,17 @@ Choose OpenAI or Claude in the app and paste the matching API key. Keys are used
 - The default model is editable.
 - Verbosity controls how much detail the walkthrough uses.
 - Resume polish controls whether the input resume gets light cleanup, an executive rewrite, or a technical rewrite.
+- Resume look-and-feel direction controls the resume structure, density, hierarchy, and visual tone used by the full regeneration.
 
 ## Workflow
 
 1. Paste the actual resume.
 2. Paste any other free-form context about the candidate.
 3. Paste the target role or platform description.
-4. Choose provider, verbosity, and resume polish level.
-5. Generate.
+4. Choose provider, verbosity, resume polish level, and resume look-and-feel direction.
+5. Generate or regenerate everything.
 6. Edit the polished resume and each overlay step directly.
-7. Or prompt the LLM to revise a selected step.
+7. Prompt the LLM to revise a selected step, or use Regenerate everything to rebuild the polished resume and full tour.
 8. Preview the exact overlay experience.
 9. Export one standalone HTML file.
 

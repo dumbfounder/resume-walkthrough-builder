@@ -260,6 +260,19 @@ label {
   padding-top: 14px;
 }
 
+.regenerate-card {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid rgba(36, 95, 101, .22);
+  border-radius: 16px;
+  background: rgba(224, 238, 236, .42);
+}
+
+.regenerate-card .primary {
+  justify-self: start;
+}
+
 .empty-edit,
 .preview-notes {
   border: 1px dashed var(--border);

@@ -3,6 +3,7 @@ export interface StudioInputs {
   aboutText: string;
   targetText: string;
   guidanceText: string;
+  resumeStyleDirection: string;
   verbosity: "tight" | "balanced" | "detailed" | "deep";
   resumePolish: "light cleanup" | "executive rewrite" | "technical rewrite";
 }

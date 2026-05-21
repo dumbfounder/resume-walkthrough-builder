@@ -11,6 +11,7 @@ const emptyInputs: StudioInputs = {
   aboutText: "",
   targetText: "",
   guidanceText: "",
+  resumeStyleDirection: "",
   verbosity: "balanced",
   resumePolish: "executive rewrite"
 };
@@ -56,7 +57,7 @@ export default function App() {
 
   async function handleGenerate() {
     if (!canGenerate || state.isGenerating) return;
-    setState((current) => ({ ...current, isGenerating: true, error: "", status: "Generating a polished overlay walkthrough..." }));
+    setState((current) => ({ ...current, isGenerating: true, error: "", status: "Regenerating the polished resume and overlay walkthrough..." }));
     try {
       const walkthrough = await generateOverlayWalkthrough({
         provider: state.provider,
@@ -70,14 +71,14 @@ export default function App() {
         selectedStepId: walkthrough.steps[0]?.id ?? null,
         selectedMode: "edit",
         isGenerating: false,
-        status: "Walkthrough generated. Edit the steps until every overlay feels right."
+        status: "Everything regenerated. Edit the resume and steps until the artifact feels right."
       }));
     } catch (error) {
       setState((current) => ({
         ...current,
         isGenerating: false,
-        error: error instanceof Error ? error.message : "Could not generate walkthrough.",
-        status: "Generation stopped."
+        error: error instanceof Error ? error.message : "Could not regenerate the resume and walkthrough.",
+        status: "Full regeneration stopped."
       }));
     }
   }
@@ -265,6 +266,11 @@ export default function App() {
               onSelectStep={(id) => setState((current) => ({ ...current, selectedStepId: id }))}
               onWalkthroughChange={updateWalkthrough}
               onStepChange={updateStep}
+              inputs={state.inputs}
+              canRegenerate={Boolean(canGenerate)}
+              isGenerating={state.isGenerating}
+              onInputChange={updateInputs}
+              onRegenerateAll={handleGenerate}
               onMove={moveStep}
               onAdd={addStep}
               onRemove={removeStep}
@@ -397,6 +403,15 @@ function ComposePanel({
         />
       </label>
       <label>
+        Resume look and feel
+        <textarea
+          value={state.inputs.resumeStyleDirection}
+          onChange={(event) => onInputChange({ resumeStyleDirection: event.target.value })}
+          rows={4}
+          placeholder="Example: make the resume itself feel like a high-end executive briefing; restrained, dense, confident, with polished bullets and clear hierarchy."
+        />
+      </label>
+      <label>
         Direction for the generated walkthrough
         <textarea
           value={state.inputs.guidanceText}
@@ -407,7 +422,7 @@ function ComposePanel({
       </label>
       <div className="action-row">
         <button type="button" className="primary" onClick={onGenerate} disabled={!canGenerate || state.isGenerating}>
-          {state.isGenerating ? "Generating..." : "Generate walkthrough"}
+          {state.isGenerating ? "Regenerating everything..." : "Generate / regenerate everything"}
         </button>
         <button type="button" className="quiet" onClick={onReset}>
           Reset
@@ -426,6 +441,11 @@ function EditPanel({
   onSelectStep,
   onWalkthroughChange,
   onStepChange,
+  inputs,
+  canRegenerate,
+  isGenerating,
+  onInputChange,
+  onRegenerateAll,
   onMove,
   onAdd,
   onRemove,
@@ -440,6 +460,11 @@ function EditPanel({
   onSelectStep: (id: string) => void;
   onWalkthroughChange: (patch: Partial<OverlayWalkthroughModel>) => void;
   onStepChange: (patch: Partial<OverlayStep>) => void;
+  inputs: StudioInputs;
+  canRegenerate: boolean;
+  isGenerating: boolean;
+  onInputChange: (patch: Partial<StudioInputs>) => void;
+  onRegenerateAll: () => void;
   onMove: (direction: -1 | 1) => void;
   onAdd: () => void;
   onRemove: () => void;
@@ -468,6 +493,21 @@ function EditPanel({
         ))}
         <button type="button" onClick={onAdd}>
           +
+        </button>
+      </div>
+
+      <div className="regenerate-card">
+        <label>
+          Resume look and feel
+          <textarea
+            value={inputs.resumeStyleDirection}
+            onChange={(event) => onInputChange({ resumeStyleDirection: event.target.value })}
+            rows={4}
+            placeholder="Example: make the resume feel like a crisp executive briefing, dense but elegant, with strong section hierarchy and no startup hype."
+          />
+        </label>
+        <button type="button" className="primary" onClick={onRegenerateAll} disabled={!canRegenerate || isGenerating}>
+          {isGenerating ? "Regenerating everything..." : "Regenerate everything"}
         </button>
       </div>
 
