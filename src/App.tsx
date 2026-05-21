@@ -55,6 +55,24 @@ export default function App() {
   const selectedIndex = state.walkthrough?.steps.findIndex((step) => step.id === selectedStep?.id) ?? -1;
   const canGenerate = state.inputs.resumeText.trim() && state.inputs.targetText.trim();
 
+  async function handleCheckProxy() {
+    setState((current) => ({ ...current, error: "", status: "Checking the local AI proxy loaded by this browser tab..." }));
+    try {
+      const response = await fetch("/api/ai-health", { cache: "no-store" });
+      const text = await response.text();
+      if (!response.ok) {
+        throw new Error(`Local AI proxy health returned ${response.status}: ${text.slice(0, 120)}`);
+      }
+      setState((current) => ({ ...current, status: "Local AI proxy is loaded in this browser tab. Claude route is available." }));
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        error: error instanceof Error ? error.message : "Local AI proxy health check failed.",
+        status: "This browser tab is not connected to the current local AI proxy."
+      }));
+    }
+  }
+
   async function handleGenerate() {
     if (!canGenerate || state.isGenerating) return;
     setState((current) => ({ ...current, isGenerating: true, error: "", status: "Regenerating the polished resume and overlay walkthrough..." }));
@@ -251,6 +269,7 @@ export default function App() {
               canGenerate={Boolean(canGenerate)}
               onStateChange={setState}
               onInputChange={updateInputs}
+              onCheckProxy={handleCheckProxy}
               onGenerate={handleGenerate}
               onReset={reset}
             />
@@ -302,6 +321,7 @@ function ComposePanel({
   canGenerate,
   onStateChange,
   onInputChange,
+  onCheckProxy,
   onGenerate,
   onReset
 }: {
@@ -309,6 +329,7 @@ function ComposePanel({
   canGenerate: boolean;
   onStateChange: Dispatch<SetStateAction<StudioState>>;
   onInputChange: (patch: Partial<StudioInputs>) => void;
+  onCheckProxy: () => void;
   onGenerate: () => void;
   onReset: () => void;
 }) {
@@ -375,6 +396,9 @@ function ComposePanel({
         />
         Save key in this browser only
       </label>
+      <button type="button" className="quiet check-proxy" onClick={onCheckProxy}>
+        Check local AI proxy
+      </button>
       <label>
         Resume
         <textarea

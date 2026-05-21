@@ -217,6 +217,10 @@ label {
   width: auto;
 }
 
+.check-proxy {
+  justify-self: start;
+}
+
 .step-strip {
   display: flex;
   flex-wrap: wrap;

@@ -2,6 +2,19 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
 
 function aiProxyPlugin() {
+  function handleHealth(_req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) {
+    res.statusCode = 200;
+    res.setHeader("Content-Type", "application/json");
+    res.end(
+      JSON.stringify({
+        ok: true,
+        service: "resume-walkthrough-builder-ai-proxy",
+        routes: ["/api/openai-responses", "/api/anthropic-messages"],
+        timestamp: new Date().toISOString()
+      })
+    );
+  }
+
   async function handle(req: import("node:http").IncomingMessage, res: import("node:http").ServerResponse) {
     if (req.method !== "POST") {
       res.statusCode = 405;
@@ -83,10 +96,12 @@ function aiProxyPlugin() {
   return {
     name: "local-ai-provider-proxy",
     configureServer(server: import("vite").ViteDevServer) {
+      server.middlewares.use("/api/ai-health", handleHealth);
       server.middlewares.use("/api/openai-responses", handle);
       server.middlewares.use("/api/anthropic-messages", handleAnthropic);
     },
     configurePreviewServer(server: import("vite").PreviewServer) {
+      server.middlewares.use("/api/ai-health", handleHealth);
       server.middlewares.use("/api/openai-responses", handle);
       server.middlewares.use("/api/anthropic-messages", handleAnthropic);
     }
