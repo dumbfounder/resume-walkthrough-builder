@@ -30,7 +30,9 @@ Choose OpenAI or Claude in the app and paste the matching API key. Keys are used
 - No API key is stored in source.
 - The key is not included in exported HTML.
 - If `Save key in this browser only` is checked, it is saved in localStorage on this machine.
-- The default model is editable.
+- Model selection is a provider-aware dropdown of current high-quality model IDs.
+- Claude options: `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`.
+- OpenAI options: `gpt-5.5`, `gpt-5.5-pro`, `gpt-5.4`, `gpt-5.4-pro`, `gpt-5.4-mini`, `gpt-5.4-nano`.
 - Verbosity controls how much detail the walkthrough uses.
 - Resume polish controls whether the input resume gets light cleanup, an executive rewrite, or a technical rewrite.
 - Resume look-and-feel direction controls the resume structure, density, hierarchy, and visual tone used by the full regeneration.

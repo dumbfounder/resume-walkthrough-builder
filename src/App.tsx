@@ -6,6 +6,22 @@ import type { OverlayStep, OverlayWalkthroughModel, PolishedResume, StudioInputs
 const STORAGE_KEY = "resume-overlay-studio:v2";
 const KEY_STORAGE_KEY = "resume-overlay-studio:provider-keys";
 
+const modelOptions: Record<StudioState["provider"], { value: string; label: string; note: string }[]> = {
+  openai: [
+    { value: "gpt-5.5", label: "GPT-5.5", note: "Best OpenAI default for complex professional work" },
+    { value: "gpt-5.5-pro", label: "GPT-5.5 pro", note: "Most precise, slower, premium" },
+    { value: "gpt-5.4", label: "GPT-5.4", note: "Frontier quality at lower cost" },
+    { value: "gpt-5.4-pro", label: "GPT-5.4 pro", note: "Heavier reasoning, premium" },
+    { value: "gpt-5.4-mini", label: "GPT-5.4 mini", note: "Fast and cost efficient" },
+    { value: "gpt-5.4-nano", label: "GPT-5.4 nano", note: "Cheapest latest GPT-5.4-class model" }
+  ],
+  anthropic: [
+    { value: "claude-opus-4-7", label: "Claude Opus 4.7", note: "Most capable Claude model" },
+    { value: "claude-sonnet-4-6", label: "Claude Sonnet 4.6", note: "Best speed/intelligence balance" },
+    { value: "claude-haiku-4-5-20251001", label: "Claude Haiku 4.5", note: "Fastest latest Claude model" }
+  ]
+};
+
 const emptyInputs: StudioInputs = {
   resumeText: "",
   aboutText: "",
@@ -20,7 +36,7 @@ const emptyState: StudioState = {
   provider: "openai",
   openaiApiKey: "",
   anthropicApiKey: "",
-  model: "gpt-5.5",
+  model: defaultModelForProvider("openai"),
   saveKey: false,
   inputs: emptyInputs,
   walkthrough: null,
@@ -80,7 +96,7 @@ export default function App() {
       const walkthrough = await generateOverlayWalkthrough({
         provider: state.provider,
         apiKey: activeApiKey(state),
-        model: state.model,
+        model: resolveModelForProvider(state.provider, state.model),
         inputs: state.inputs
       });
       setState((current) => ({
@@ -108,7 +124,7 @@ export default function App() {
       const revisedStep = await reviseOverlayStep({
         provider: state.provider,
         apiKey: activeApiKey(state),
-        model: state.model,
+        model: resolveModelForProvider(state.provider, state.model),
         inputs: state.inputs,
         walkthrough: state.walkthrough,
         step: selectedStep,
@@ -385,7 +401,13 @@ function ComposePanel({
         </label>
         <label>
           Model
-          <input value={state.model} onChange={(event) => onStateChange((current) => ({ ...current, model: event.target.value }))} />
+          <select value={resolveModelForProvider(state.provider, state.model)} onChange={(event) => onStateChange((current) => ({ ...current, model: event.target.value }))}>
+            {modelOptions[state.provider].map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label} - {option.note}
+              </option>
+            ))}
+          </select>
         </label>
       </div>
       <label className="save-key">
@@ -765,12 +787,13 @@ function loadState(): StudioState {
     if (!saved) return { ...emptyState, ...savedKeys, saveKey: Boolean(savedKeys.openaiApiKey || savedKeys.anthropicApiKey) };
     const parsed = JSON.parse(saved) as Partial<StudioState>;
     const provider = parsed.provider ?? "openai";
+    const model = resolveModelForProvider(provider, parsed.model);
     return {
       ...emptyState,
       ...parsed,
       ...savedKeys,
       provider,
-      model: parsed.model || defaultModelForProvider(provider),
+      model,
       saveKey: Boolean(savedKeys.openaiApiKey || savedKeys.anthropicApiKey),
       inputs: { ...emptyInputs, ...(parsed.inputs ?? {}) },
       walkthrough: parsed.walkthrough ? migrateWalkthrough(parsed.walkthrough) : null,
@@ -825,7 +848,12 @@ function activeApiKey(state: StudioState): string {
 }
 
 function defaultModelForProvider(provider: StudioState["provider"]): string {
-  return provider === "anthropic" ? "claude-sonnet-4-5" : "gpt-5.5";
+  return modelOptions[provider][0]?.value ?? "";
+}
+
+function resolveModelForProvider(provider: StudioState["provider"], model?: string): string {
+  if (model && modelOptions[provider].some((option) => option.value === model)) return model;
+  return defaultModelForProvider(provider);
 }
 
 function readSavedKeys(): Pick<StudioState, "openaiApiKey" | "anthropicApiKey"> {
