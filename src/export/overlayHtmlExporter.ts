@@ -6,6 +6,7 @@ export function buildOverlayHtml(model: OverlayWalkthroughModel, inputs: StudioI
     resumeText: inputs.resumeText,
     aboutText: inputs.aboutText,
     targetText: inputs.targetText,
+    resumeTemplate: inputs.resumeTemplate,
     exportedAt: new Date().toISOString()
   };
   const title = [model.candidateName || "Resume", model.targetTitle || "Walkthrough"].filter(Boolean).join(" - ");
@@ -142,6 +143,39 @@ button { font: inherit; }
 }
 .source-version .resume-line {
   color: #3b4148;
+}
+.resume-document.template-modern-classic {
+  --accent: #222831;
+  --paper: #ffffff;
+  border-color: #d8dce0;
+  box-shadow: 0 22px 70px rgba(31, 37, 44, .12);
+}
+.resume-document.template-modern-classic::before {
+  background: #222831;
+}
+.resume-document.template-technical-leader {
+  --accent: #1f5a8a;
+  --paper: #fbfdff;
+  border-color: #cbd9e6;
+}
+.resume-document.template-technical-leader::before {
+  background: linear-gradient(#1f5a8a, #4a7c59);
+}
+.resume-document.template-founder-operator {
+  --accent: #38614a;
+  --paper: #fffdf6;
+  border-color: #d7d0bd;
+}
+.resume-document.template-founder-operator::before {
+  background: linear-gradient(#38614a, #b8892f);
+}
+.resume-document.template-board-memo {
+  --accent: #27384a;
+  --paper: #fffefa;
+  border-color: #cfd4d9;
+}
+.resume-document.template-board-memo::before {
+  background: linear-gradient(#27384a, #7a6b52);
 }
 .tour-active .resume-document {
   transform: translateX(-7%);
@@ -598,6 +632,10 @@ function exportJs(): string {
       .replace(/\\bproof point\\b/gi, "evidence")
       .replace(/\\bmental model\\b/gi, "starting point");
   }
+  function templateClass() {
+    const value = String(data.resumeTemplate || "executiveBriefing");
+    return "template-" + value.replace(/[A-Z]/g, letter => "-" + letter.toLowerCase());
+  }
   function detailBlocks(step) {
     if (Array.isArray(step.detailBlocks) && step.detailBlocks.length) {
       return step.detailBlocks.filter(block => block && (block.title || block.body));
@@ -628,20 +666,20 @@ function exportJs(): string {
   function render() {
     const step = steps[active] || {};
     const usePolished = tourActive;
-    const resumeLabel = usePolished ? "Generated resume" : "Starting resume";
+    const resumeLabel = usePolished ? "Resume" : "Resume";
     const resumeName = usePolished ? ((model.polishedResume && model.polishedResume.name) || model.candidateName || rawResumeTitle()) : rawResumeTitle();
-    const resumeHeadline = usePolished ? ((model.polishedResume && model.polishedResume.headline) || model.candidateHeadline || model.targetTitle || "Interactive walkthrough") : "Original pasted version";
+    const resumeHeadline = usePolished ? ((model.polishedResume && model.polishedResume.headline) || model.candidateHeadline || model.targetTitle || "Candidate profile") : "Original version";
     root.className = "mode-" + mode + (tourActive ? " tour-active generated-version" : " resume-first start-version");
     root.innerHTML =
       '<main class="artifact-shell">' +
         '<div class="topbar">' +
-          '<div class="brand"><strong>Resume Walkthrough</strong><span>' + (tourActive ? "Generated resume walkthrough" : "Starting resume") + '</span><span>Built with a custom resume tool in under a day</span></div>' +
+          '<div class="brand"><strong>Candidate Fit</strong><span>' + esc(model.targetTitle || "Role review") + '</span><span>' + esc(model.targetOrganization || "Hiring brief") + '</span></div>' +
           '<div class="controls">' +
             button("walk", "Walkthrough") + button("brief", "Fit brief") + '<button type="button" data-print>Print</button>' +
           '</div>' +
         '</div>' +
         '<section class="resume-stage">' +
-          '<article class="resume-document ' + (usePolished ? "generated-version" : "source-version") + '">' +
+          '<article class="resume-document ' + (usePolished ? "generated-version " + templateClass() : "source-version") + '">' +
             '<header class="resume-head"><div><p>' + resumeLabel + '</p><h1>' + esc(resumeName) + '</h1></div><span>' + esc(resumeHeadline) + '</span></header>' +
             ((usePolished && model.polishedResume && model.polishedResume.contactLine) ? '<p class="resume-contact">' + esc(model.polishedResume.contactLine) + '</p>' : '') +
             ((usePolished && model.polishedResume && model.polishedResume.summary) ? '<p class="resume-summary">' + esc(model.polishedResume.summary) + '</p>' : '') +
@@ -657,12 +695,12 @@ function exportJs(): string {
     return '<button type="button" data-mode="' + id + '" class="' + (mode === id ? "active" : "") + '">' + label + '</button>';
   }
   function renderLaunchNote() {
-    return '<aside class="launch-note"><strong>Opening with the starting resume.</strong><p>In a moment, it reveals the redesigned resume and turns into an interactive walkthrough over the polished version.</p><button class="start-button" type="button" data-start>Reveal walkthrough now</button></aside>';
+    return '<aside class="launch-note"><strong>Guided notes start in a moment.</strong><p>The walkthrough will highlight the resume evidence most relevant to this role.</p><button class="start-button" type="button" data-start>Start now</button></aside>';
   }
   function renderPopover(step) {
     return '<article class="tour-popover">' +
       '<div class="tour-actions"><span>Step ' + (active + 1) + ' of ' + Math.max(1, steps.length) + '</span><div><button type="button" data-prev ' + (active <= 0 ? "disabled" : "") + '>Back</button><button type="button" data-next ' + (active >= steps.length - 1 ? "disabled" : "") + '>Next</button></div></div>' +
-      '<div class="tour-kicker"><span>What to notice</span><em>' + esc(step.confidence || "") + '</em></div>' +
+      '<div class="tour-kicker"><span>Hiring signal</span><em>' + esc(step.confidence || "") + '</em></div>' +
       '<h2>' + esc(naturalTitle(step.title || "")) + '</h2>' +
       '<p class="tour-narrative">' + esc(step.narrative || "") + '</p>' +
       '<div class="tour-insights">' +

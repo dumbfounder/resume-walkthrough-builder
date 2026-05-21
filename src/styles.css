@@ -198,7 +198,7 @@ label {
 }
 
 .provider-grid {
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1.2fr 1fr 1fr;
 }
 
 .brief-fields label:last-child {
@@ -275,6 +275,12 @@ label {
 
 .regenerate-card .primary {
   justify-self: start;
+}
+
+.template-grid {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr;
+  gap: 10px;
 }
 
 .empty-edit,
@@ -402,30 +408,6 @@ label {
   padding: clamp(28px, 4vw, 54px);
 }
 
-.version-strip {
-  width: min(760px, 100%);
-  margin: 0 auto 14px;
-  display: flex;
-  justify-content: space-between;
-  gap: 14px;
-  align-items: center;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.version-strip span,
-.version-strip strong {
-  border: 1px solid rgba(32, 38, 45, .12);
-  border-radius: 999px;
-  background: rgba(255, 253, 248, .62);
-  padding: 7px 11px;
-}
-
-.version-strip strong {
-  border-color: rgba(36, 95, 101, .24);
-  color: var(--accent);
-}
-
 .resume-document {
   position: relative;
   width: min(760px, 100%);
@@ -435,6 +417,47 @@ label {
   border: 1px solid rgba(32,38,45,.12);
   box-shadow: 0 26px 90px rgba(32, 38, 45, .16);
   padding: clamp(34px, 5vw, 58px);
+}
+
+.resume-document.template-modern-classic {
+  --accent: #222831;
+  --paper: #ffffff;
+  border-color: #d8dce0;
+  box-shadow: 0 22px 70px rgba(32, 38, 45, .12);
+}
+
+.resume-document.template-modern-classic::before {
+  background: #222831;
+}
+
+.resume-document.template-technical-leader {
+  --accent: #1f5a8a;
+  --paper: #fbfdff;
+  border-color: #cbd9e6;
+}
+
+.resume-document.template-technical-leader::before {
+  background: linear-gradient(#1f5a8a, #4a7c59);
+}
+
+.resume-document.template-founder-operator {
+  --accent: #38614a;
+  --paper: #fffdf6;
+  border-color: #d7d0bd;
+}
+
+.resume-document.template-founder-operator::before {
+  background: linear-gradient(#38614a, #b8892f);
+}
+
+.resume-document.template-board-memo {
+  --accent: #27384a;
+  --paper: #fffefa;
+  border-color: #cfd4d9;
+}
+
+.resume-document.template-board-memo::before {
+  background: linear-gradient(#27384a, #7a6b52);
 }
 
 .resume-document::before {
@@ -731,6 +754,7 @@ label {
 
   .api-row,
   .provider-grid,
+  .template-grid,
   .brief-fields {
     grid-template-columns: 1fr;
   }

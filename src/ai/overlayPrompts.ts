@@ -2,9 +2,13 @@ import type { StudioInputs } from "../types/overlay";
 
 export const overlaySystemPrompt = `You create polished, source-grounded interactive resume walkthroughs.
 
-The output includes a polished resume plus an explanation layer over the candidate's actual resume and background.
+The output includes a polished resume plus an explanation layer for a hiring decision-maker who is evaluating whether to interview, hire, fund, or back the candidate.
 
 Rules:
+- Write for the reviewer, not for the builder app. The audience may be a CEO, founder, hiring manager, CTO, recruiter, board member, or investor.
+- The walkthrough is a hiring argument grounded in resume evidence. It should explain why the candidate is credible for the role, what to pay attention to, what questions to ask next, and where the evidence is strong or thin.
+- Never use reviewer-facing language that talks about the product, app, artifact, schema, generation process, overlay mechanics, pasted input, or "this tool".
+- Avoid titles like "Start with the headline" or "Look at this section." Prefer direct hiring-relevance titles like "He has already built the data spine this role depends on."
 - Use only facts supplied in the resume text and free-form background text.
 - Do not invent employers, dates, degrees, projects, metrics, technologies, titles, funding, or outcomes.
 - Do not turn rough notes into more specific claims than the source supports. For example, "made encryption thing" may become "built an encryption product" but not a named category, market, protocol, or outcome that the source did not state.
@@ -16,7 +20,9 @@ Rules:
 - Rework the resume so it looks sharp and reads well, while preserving factual content.
 - The polishedResume should be a beautiful, sendable resume layout with concise sections and strong readable bullets.
 - Follow the user's resume design prompt for structure, density, tone, and visual pacing, while still keeping the exported resume clean and readable.
-- Follow the user's walkthrough technique prompt. The technique may be a product tour, guided annotation, board memo, technical walkthrough, objection-handling sequence, founder pitch, recruiter skim, or anything else the user asks for.
+- Follow resumeVerbosity for the polished resume only. Compact means fewer bullets and shorter sections. Balanced means normal senior resume density. Expanded means fuller but still edited evidence.
+- Follow the user's walkthrough technique prompt. The technique may be a hiring case, guided annotation, board memo, technical walkthrough, objection-handling sequence, founder pitch, recruiter skim, or anything else the user asks for.
+- Follow walkthroughVerbosity for the overlay only. Tight means short, decisive notes. Balanced means clear explanatory notes. Detailed means richer context. Deep means more strategic explanation while still avoiding fluff.
 - Follow the user's continuity prompt so the steps feel like one intentional story, not separate generated cards.
 - Do not impose a canned framework. The JSON schema is only the transport format; the wording, order, technique, and emphasis should come from the user's prompts and the supplied source material.
 - Do not use generic taxonomy labels, consulting-style category names, or repeated fixed section names unless the user explicitly asks for them.
@@ -46,10 +52,12 @@ export function buildWalkthroughInput(inputs: StudioInputs): string {
       freeformBackgroundText: inputs.aboutText,
       targetRoleOrPlatformDescription: inputs.targetText,
       extraDirectionAndConstraints: inputs.guidanceText,
+      selectedResumeTemplate: resumeTemplatePrompt(inputs.resumeTemplate),
       resumeDesignPrompt: inputs.resumeStyleDirection || defaultResumeDesignPrompt,
       walkthroughTechniquePrompt: inputs.walkthroughTechniquePrompt || defaultWalkthroughTechniquePrompt,
       continuityPrompt: inputs.continuityPrompt || defaultContinuityPrompt,
-      verbosity: inputs.verbosity,
+      resumeVerbosity: inputs.resumeVerbosity,
+      walkthroughVerbosity: inputs.walkthroughVerbosity,
       requiredExperience: "The exported HTML should walk a reviewer through how the supplied experience fits the supplied role/platform."
     },
     null,
@@ -65,10 +73,12 @@ export function buildStepRevisionInput(inputs: StudioInputs, currentModel: unkno
       freeformBackgroundText: inputs.aboutText,
       targetRoleOrPlatformDescription: inputs.targetText,
       extraDirectionAndConstraints: inputs.guidanceText,
+      selectedResumeTemplate: resumeTemplatePrompt(inputs.resumeTemplate),
       resumeDesignPrompt: inputs.resumeStyleDirection || defaultResumeDesignPrompt,
       walkthroughTechniquePrompt: inputs.walkthroughTechniquePrompt || defaultWalkthroughTechniquePrompt,
       continuityPrompt: inputs.continuityPrompt || defaultContinuityPrompt,
-      verbosity: inputs.verbosity,
+      resumeVerbosity: inputs.resumeVerbosity,
+      walkthroughVerbosity: inputs.walkthroughVerbosity,
       currentWalkthroughModel: currentModel,
       stepToRevise: step,
       userRevisionInstruction: instruction
@@ -86,3 +96,19 @@ const defaultWalkthroughTechniquePrompt =
 
 const defaultContinuityPrompt =
   "Make the steps feel like one coherent story from resume evidence to role relevance, not separate generated cards.";
+
+function resumeTemplatePrompt(template: StudioInputs["resumeTemplate"]): string {
+  switch (template) {
+    case "modernClassic":
+      return "Modern Classic: traditional resume structure, crisp black-and-white hierarchy, conservative spacing, clear dates/titles, and quietly polished bullets.";
+    case "technicalLeader":
+      return "Technical Leader: dense but readable systems resume, strong architecture and technical capability sections, precise bullets, and clear evidence of technical judgment.";
+    case "founderOperator":
+      return "Founder Operator: emphasizes ownership, company-building, product judgment, capital/resource leverage, and shipped systems without hype.";
+    case "boardMemo":
+      return "Board Memo: high-trust senior briefing style, concise executive summary, risk-aware language, strong signal-to-noise, and board/investor readability.";
+    case "executiveBriefing":
+    default:
+      return "Executive Briefing: premium, sparse, CEO-readable resume with clean hierarchy, confident language, and restrained executive polish.";
+  }
+}

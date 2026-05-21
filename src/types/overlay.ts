@@ -4,9 +4,12 @@ export interface StudioInputs {
   targetText: string;
   guidanceText: string;
   resumeStyleDirection: string;
+  resumeTemplate: "executiveBriefing" | "modernClassic" | "technicalLeader" | "founderOperator" | "boardMemo";
   walkthroughTechniquePrompt: string;
   continuityPrompt: string;
-  verbosity: "tight" | "balanced" | "detailed" | "deep";
+  resumeVerbosity: "compact" | "balanced" | "expanded";
+  walkthroughVerbosity: "tight" | "balanced" | "detailed" | "deep";
+  verbosity?: "tight" | "balanced" | "detailed" | "deep";
 }
 
 export interface PolishedResumeSection {

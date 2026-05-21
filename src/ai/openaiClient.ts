@@ -245,7 +245,7 @@ function createFallbackSteps(value: Record<string, unknown>): OverlayStep[] {
   return [
     {
       id: "step-1",
-      title: "Start with the source material",
+      title: "Use the strongest verified evidence",
       eyebrow: "Step 1",
       narrative: "Generation returned a partial structure, so this step is intentionally conservative. Review the resume text and add the strongest supported point here.",
       detailBlocks: [

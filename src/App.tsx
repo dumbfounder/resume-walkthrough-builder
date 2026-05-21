@@ -5,7 +5,15 @@ import type { OverlayDetailBlock, OverlayStep, OverlayWalkthroughModel, Polished
 
 const STORAGE_KEY = "resume-overlay-studio:v2";
 const KEY_STORAGE_KEY = "resume-overlay-studio:provider-keys";
-const DRAFT_SCHEMA_VERSION = 5;
+const DRAFT_SCHEMA_VERSION = 6;
+
+const resumeTemplateOptions: { value: StudioInputs["resumeTemplate"]; label: string; note: string }[] = [
+  { value: "executiveBriefing", label: "Executive Briefing", note: "Crisp, premium, CEO-readable" },
+  { value: "modernClassic", label: "Modern Classic", note: "Traditional resume with cleaner hierarchy" },
+  { value: "technicalLeader", label: "Technical Leader", note: "Dense systems and architecture signal" },
+  { value: "founderOperator", label: "Founder Operator", note: "Builder, ownership, and leverage" },
+  { value: "boardMemo", label: "Board Memo", note: "High-trust briefing for senior review" }
+];
 
 const modelOptions: Record<StudioState["provider"], { value: string; label: string; note: string }[]> = {
   openai: [
@@ -29,9 +37,11 @@ const emptyInputs: StudioInputs = {
   targetText: "",
   guidanceText: "",
   resumeStyleDirection: "",
+  resumeTemplate: "executiveBriefing",
   walkthroughTechniquePrompt: "",
   continuityPrompt: "",
-  verbosity: "balanced"
+  resumeVerbosity: "balanced",
+  walkthroughVerbosity: "balanced"
 };
 
 const emptyState: StudioState = {
@@ -394,8 +404,26 @@ function ComposePanel({
           </select>
         </label>
         <label>
-          Verbosity
-          <select value={state.inputs.verbosity} onChange={(event) => onInputChange({ verbosity: event.target.value as StudioInputs["verbosity"] })}>
+          Resume template
+          <select value={state.inputs.resumeTemplate} onChange={(event) => onInputChange({ resumeTemplate: event.target.value as StudioInputs["resumeTemplate"] })}>
+            {resumeTemplateOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label} - {option.note}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Resume detail
+          <select value={state.inputs.resumeVerbosity} onChange={(event) => onInputChange({ resumeVerbosity: event.target.value as StudioInputs["resumeVerbosity"] })}>
+            <option value="compact">Compact</option>
+            <option value="balanced">Balanced</option>
+            <option value="expanded">Expanded</option>
+          </select>
+        </label>
+        <label>
+          Walkthrough depth
+          <select value={state.inputs.walkthroughVerbosity} onChange={(event) => onInputChange({ walkthroughVerbosity: event.target.value as StudioInputs["walkthroughVerbosity"] })}>
             <option value="tight">Tight</option>
             <option value="balanced">Balanced</option>
             <option value="detailed">Detailed</option>
@@ -483,7 +511,7 @@ function ComposePanel({
           value={state.inputs.walkthroughTechniquePrompt}
           onChange={(event) => onInputChange({ walkthroughTechniquePrompt: event.target.value })}
           rows={4}
-          placeholder="Tell the model how the overlay should teach the resume: product tour, guided annotation, objection handling, board memo, founder pitch, technical deep dive, or another technique."
+          placeholder="Tell the model how the notes should make the hiring case: guided annotation, objection handling, board memo, founder pitch, technical deep dive, or another technique."
         />
       </label>
       <label>
@@ -581,6 +609,35 @@ function EditPanel({
       </div>
 
       <div className="regenerate-card">
+        <div className="template-grid">
+          <label>
+            Resume template
+            <select value={inputs.resumeTemplate} onChange={(event) => onInputChange({ resumeTemplate: event.target.value as StudioInputs["resumeTemplate"] })}>
+              {resumeTemplateOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label} - {option.note}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Resume detail
+            <select value={inputs.resumeVerbosity} onChange={(event) => onInputChange({ resumeVerbosity: event.target.value as StudioInputs["resumeVerbosity"] })}>
+              <option value="compact">Compact</option>
+              <option value="balanced">Balanced</option>
+              <option value="expanded">Expanded</option>
+            </select>
+          </label>
+          <label>
+            Walkthrough depth
+            <select value={inputs.walkthroughVerbosity} onChange={(event) => onInputChange({ walkthroughVerbosity: event.target.value as StudioInputs["walkthroughVerbosity"] })}>
+              <option value="tight">Tight</option>
+              <option value="balanced">Balanced</option>
+              <option value="detailed">Detailed</option>
+              <option value="deep">Deep walkthrough</option>
+            </select>
+          </label>
+        </div>
         <label>
           Resume design prompt
           <textarea
@@ -762,14 +819,10 @@ function OverlayPreview({
   return (
     <div className="artifact-frame">
       <div className="artifact-toolbar">
-        <span>Resume walkthrough preview</span>
+        <span>Candidate fit preview</span>
         <strong>{model.targetTitle || "Target role"}</strong>
       </div>
       <div className="resume-tour-canvas">
-        <div className="version-strip" aria-label="Resume versions">
-          <span>Starts with pasted resume</span>
-          <strong>Reveals redesigned resume + walkthrough</strong>
-        </div>
         <ResumeDocument model={model} inputs={inputs} selectedStep={selectedStep} />
         <article className="tour-popover">
           <div className="tour-actions">
@@ -784,7 +837,7 @@ function OverlayPreview({
             </div>
           </div>
           <div className="tour-kicker">
-            <span>What to notice</span>
+            <span>Hiring signal</span>
             <em>{selectedStep.confidence}</em>
           </div>
           <h2>{naturalDisplayTitle(selectedStep.title)}</h2>
@@ -824,6 +877,10 @@ function adjacentStepId(model: OverlayWalkthroughModel, selectedStep: OverlaySte
   return model.steps[nextIndex]?.id ?? selectedStep.id;
 }
 
+function templateClass(template: StudioInputs["resumeTemplate"]): string {
+  return `template-${template.replace(/[A-Z]/g, (letter) => `-${letter.toLowerCase()}`)}`;
+}
+
 function naturalDisplayTitle(value: string): string {
   return value
     .replace(/\bexecutive pattern\b/gi, "career context")
@@ -858,10 +915,10 @@ function ResumeDocument({ model, inputs, selectedStep }: { model: OverlayWalkthr
   const hasFocus = sections.some((section) => section.lines.some((line) => lineMatchesFocus(line, query)));
 
   return (
-    <article className="resume-document">
+    <article className={`resume-document ${templateClass(inputs.resumeTemplate)}`}>
       <header className="resume-head">
         <div>
-          <p>Generated resume</p>
+          <p>Resume</p>
           <h2>{model.polishedResume.name || model.candidateName || "Candidate"}</h2>
         </div>
         <span>{model.polishedResume.headline || model.candidateHeadline || model.targetTitle || "Interactive walkthrough"}</span>
@@ -893,7 +950,15 @@ function loadState(): StudioState {
     const parsed = JSON.parse(saved) as Partial<StudioState>;
     const provider = parsed.provider ?? "openai";
     const model = resolveModelForProvider(provider, parsed.model);
-    const inputs = { ...emptyInputs, ...(parsed.inputs ?? {}) };
+    const rawInputs = (parsed.inputs ?? {}) as Partial<StudioInputs>;
+    const legacyVerbosity = rawInputs.verbosity ?? "balanced";
+    const inputs = {
+      ...emptyInputs,
+      ...rawInputs,
+      resumeVerbosity: rawInputs.resumeVerbosity ?? "balanced",
+      walkthroughVerbosity: rawInputs.walkthroughVerbosity ?? legacyVerbosity,
+      resumeTemplate: rawInputs.resumeTemplate ?? "executiveBriefing"
+    };
     const migratedWalkthrough = parsed.walkthrough ? migrateWalkthrough(parsed.walkthrough) : null;
     const savedVersion = typeof parsed.draftSchemaVersion === "number" ? parsed.draftSchemaVersion : 0;
     const staleWalkthrough = Boolean(migratedWalkthrough) && (savedVersion < DRAFT_SCHEMA_VERSION || !isWalkthroughCompatible(migratedWalkthrough));

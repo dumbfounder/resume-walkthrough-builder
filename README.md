@@ -7,6 +7,7 @@ The builder takes:
 - real resume text
 - free-form background/context about the candidate
 - a job description, platform memo, or role description
+- a preselected resume design template
 - a resume design prompt
 - a walkthrough technique prompt
 - a continuity prompt for the step-by-step story
@@ -35,9 +36,11 @@ Choose OpenAI or Claude in the app and paste the matching API key. Keys are used
 - Builder updates automatically invalidate stale generated walkthroughs. Pasted inputs and saved local keys are kept, so a browser hard refresh should not be needed after code/schema changes.
 - Claude options: `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`.
 - OpenAI options: `gpt-5.5`, `gpt-5.5-pro`, `gpt-5.4`, `gpt-5.4-pro`, `gpt-5.4-mini`, `gpt-5.4-nano`.
-- Verbosity controls how much detail the walkthrough uses.
+- Resume detail controls the density of the generated resume.
+- Walkthrough depth controls how much explanation appears in the guided overlay.
+- Resume template controls the visual and structural starting point: Executive Briefing, Modern Classic, Technical Leader, Founder Operator, or Board Memo.
 - Resume design prompt controls the resume structure, density, hierarchy, and visual tone used by the full regeneration.
-- Walkthrough technique prompt controls how the overlay teaches the resume, such as guided annotation, product tour, board memo, objection handling, or technical deep dive.
+- Walkthrough technique prompt controls how the overlay makes the hiring case, such as guided annotation, board memo, objection handling, founder pitch, recruiter skim, or technical deep dive.
 - Continuity prompt gives the LLM a throughline to maintain across steps.
 
 ## Workflow
@@ -45,7 +48,7 @@ Choose OpenAI or Claude in the app and paste the matching API key. Keys are used
 1. Paste the actual resume.
 2. Paste any other free-form context about the candidate.
 3. Paste the target role or platform description.
-4. Choose provider and verbosity, then write the resume design, walkthrough technique, and continuity prompts.
+4. Choose provider, resume template, resume detail, and walkthrough depth, then write any extra design or technique prompts.
 5. Generate or regenerate everything.
 6. Edit the polished resume and each overlay step directly.
 7. Prompt the LLM to revise a selected step, or use Regenerate everything to rebuild the polished resume and full tour.
@@ -67,7 +70,6 @@ The exported HTML includes:
 - slightly dimmed non-focused resume text during the tour
 - fit brief mode
 - print CSS
-- a subtle note that the file was built with a custom resume tool in under a day
 
 The exported file has no external JS, no external CSS, no CDN dependency, no backend calls, and no API calls.
 
