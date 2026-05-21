@@ -58,6 +58,7 @@ export interface OverlayWalkthroughModel {
 }
 
 export interface StudioState {
+  draftSchemaVersion: number;
   provider: "openai" | "anthropic";
   openaiApiKey: string;
   anthropicApiKey: string;

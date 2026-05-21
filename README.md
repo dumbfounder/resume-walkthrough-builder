@@ -32,6 +32,7 @@ Choose OpenAI or Claude in the app and paste the matching API key. Keys are used
 - The key is not included in exported HTML.
 - If `Save key in this browser only` is checked, it is saved in localStorage on this machine.
 - Model selection is a provider-aware dropdown of current high-quality model IDs.
+- Builder updates automatically invalidate stale generated walkthroughs. Pasted inputs and saved local keys are kept, so a browser hard refresh should not be needed after code/schema changes.
 - Claude options: `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5-20251001`.
 - OpenAI options: `gpt-5.5`, `gpt-5.5-pro`, `gpt-5.4`, `gpt-5.4-pro`, `gpt-5.4-mini`, `gpt-5.4-nano`.
 - Verbosity controls how much detail the walkthrough uses.

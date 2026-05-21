@@ -5,6 +5,7 @@ import type { OverlayDetailBlock, OverlayStep, OverlayWalkthroughModel, Polished
 
 const STORAGE_KEY = "resume-overlay-studio:v2";
 const KEY_STORAGE_KEY = "resume-overlay-studio:provider-keys";
+const DRAFT_SCHEMA_VERSION = 5;
 
 const modelOptions: Record<StudioState["provider"], { value: string; label: string; note: string }[]> = {
   openai: [
@@ -34,6 +35,7 @@ const emptyInputs: StudioInputs = {
 };
 
 const emptyState: StudioState = {
+  draftSchemaVersion: DRAFT_SCHEMA_VERSION,
   provider: "openai",
   openaiApiKey: "",
   anthropicApiKey: "",
@@ -52,6 +54,21 @@ const emptyState: StudioState = {
 export default function App() {
   const [state, setState] = useState<StudioState>(() => loadState());
   const [revisionPrompt, setRevisionPrompt] = useState("");
+
+  useEffect(() => {
+    if (state.draftSchemaVersion === DRAFT_SCHEMA_VERSION) return;
+    setState((current) => ({
+      ...current,
+      draftSchemaVersion: DRAFT_SCHEMA_VERSION,
+      walkthrough: null,
+      selectedStepId: null,
+      selectedMode: "compose",
+      isGenerating: false,
+      isRevising: false,
+      error: "",
+      status: "App updated. Your pasted inputs were kept, and the stale generated walkthrough was cleared automatically."
+    }));
+  }, [state.draftSchemaVersion]);
 
   useEffect(() => {
     const { openaiApiKey: _openaiApiKey, anthropicApiKey: _anthropicApiKey, ...persistable } = state;
@@ -876,15 +893,30 @@ function loadState(): StudioState {
     const parsed = JSON.parse(saved) as Partial<StudioState>;
     const provider = parsed.provider ?? "openai";
     const model = resolveModelForProvider(provider, parsed.model);
+    const inputs = { ...emptyInputs, ...(parsed.inputs ?? {}) };
+    const migratedWalkthrough = parsed.walkthrough ? migrateWalkthrough(parsed.walkthrough) : null;
+    const savedVersion = typeof parsed.draftSchemaVersion === "number" ? parsed.draftSchemaVersion : 0;
+    const staleWalkthrough = Boolean(migratedWalkthrough) && (savedVersion < DRAFT_SCHEMA_VERSION || !isWalkthroughCompatible(migratedWalkthrough));
+    const walkthrough = staleWalkthrough ? null : migratedWalkthrough;
+    const selectedStepId = walkthrough?.steps.some((step) => step.id === parsed.selectedStepId) ? parsed.selectedStepId ?? null : walkthrough?.steps[0]?.id ?? null;
+    const selectedMode = staleWalkthrough ? "compose" : parsed.selectedMode ?? emptyState.selectedMode;
+    const status = staleWalkthrough
+      ? "App updated. Your pasted inputs were kept, and the stale generated walkthrough was cleared automatically."
+      : parsed.status || emptyState.status;
+
     return {
       ...emptyState,
       ...parsed,
       ...savedKeys,
+      draftSchemaVersion: DRAFT_SCHEMA_VERSION,
       provider,
       model,
       saveKey: Boolean(savedKeys.openaiApiKey || savedKeys.anthropicApiKey),
-      inputs: { ...emptyInputs, ...(parsed.inputs ?? {}) },
-      walkthrough: parsed.walkthrough ? migrateWalkthrough(parsed.walkthrough) : null,
+      inputs,
+      walkthrough,
+      selectedStepId,
+      selectedMode,
+      status,
       isGenerating: false,
       isRevising: false,
       error: ""
@@ -892,6 +924,17 @@ function loadState(): StudioState {
   } catch {
     return emptyState;
   }
+}
+
+function isWalkthroughCompatible(walkthrough: OverlayWalkthroughModel | null): boolean {
+  if (!walkthrough) return true;
+  const sections = Array.isArray(walkthrough.polishedResume?.sections) ? walkthrough.polishedResume.sections : [];
+  const steps = Array.isArray(walkthrough.steps) ? walkthrough.steps : [];
+  const hasGeneratedResume = sections.some((section) => section.heading || section.lines.some((line) => line.trim()));
+  const hasUsableSteps = steps.length > 0;
+  const allStepsHaveGeneratedAnchors = steps.every((step) => typeof step.resumeAnchor === "string" && step.resumeAnchor.trim());
+  const allStepsHaveGeneratedCards = steps.every((step) => Array.isArray(step.detailBlocks) && step.detailBlocks.some((block) => block.title || block.body));
+  return hasGeneratedResume && hasUsableSteps && allStepsHaveGeneratedAnchors && allStepsHaveGeneratedCards;
 }
 
 function migrateWalkthrough(walkthrough: OverlayWalkthroughModel): OverlayWalkthroughModel {
