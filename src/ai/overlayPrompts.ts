@@ -7,8 +7,14 @@ The output includes a polished resume plus an explanation layer over the candida
 Rules:
 - Use only facts supplied in the resume text and free-form background text.
 - Do not invent employers, dates, degrees, projects, metrics, technologies, titles, funding, or outcomes.
-- Rework the resume so it looks sharp and reads well, but preserve factual content and source-grounded wording.
-- The polishedResume should be a clean, professional resume layout with concise sections and strong readable bullets.
+- Do not turn rough notes into more specific claims than the source supports. For example, "made encryption thing" may become "built an encryption product" but not a named category, market, protocol, or outcome that the source did not state.
+- If a rough note is ambiguous, clean up the wording but keep the ambiguity honest.
+- Treat the resume text as raw source material, not as a layout to preserve. It may be messy, pasted badly, or written in rough notes.
+- The polishedResume must be a substantially redesigned resume produced from the source material: clearer hierarchy, cleaner section order, edited wording, concise bullets, and professional pacing.
+- Do not copy the raw resume line breaks, raw paragraph order, or rough wording wholesale. Exact copying is allowed only for facts that should not change, such as names, employers, dates, titles, contact info, product names, technologies, and short quoted evidence.
+- If the source is just a pile of notes, turn it into the strongest honest resume possible from those facts. Do not output the pile of notes back to the user.
+- Rework the resume so it looks sharp and reads well, while preserving factual content.
+- The polishedResume should be a beautiful, sendable resume layout with concise sections and strong readable bullets.
 - Follow the user's resume design prompt for structure, density, tone, and visual pacing, while still keeping the exported resume clean and readable.
 - Follow the user's walkthrough technique prompt. The technique may be a product tour, guided annotation, board memo, technical walkthrough, objection-handling sequence, founder pitch, recruiter skim, or anything else the user asks for.
 - Follow the user's continuity prompt so the steps feel like one intentional story, not separate generated cards.
@@ -17,10 +23,11 @@ Rules:
 - Do not add fake contact info. If contact data is missing, leave the contact line blank.
 - If a fit point is inferred, state it as relevance, not as confirmed experience.
 - Every step must include a direct evidence quote or say "Needs source evidence".
-- The evidenceQuote must be an exact substring copied from the supplied resume text or background text whenever possible, because the UI highlights that exact text.
+- The evidenceQuote must be an exact substring copied from the supplied resume text or background text whenever possible. It is the provenance trail.
 - If no exact substring supports the point, set evidenceQuote to "Needs source evidence" and explain the caveat honestly.
 - Keep each evidenceQuote short enough to highlight cleanly, ideally one bullet, sentence, or phrase.
-- When possible, include each evidenceQuote verbatim somewhere in polishedResume so the tour can highlight it in the displayed resume.
+- The resumeAnchor must be an exact substring copied from the polishedResume text. This is what the overlay highlights on the displayed resume.
+- Do not force evidenceQuote into polishedResume verbatim. Rewrite the resume, then choose a resumeAnchor from the rewritten line that represents the source evidence.
 - Keep the language concrete, natural, and easy to scan.
 - Keep labels natural and human. Do not use phrases like "executive pattern", "strategic signal", "leadership archetype", "fit vector", "proof point", "mental model", or other AI-generated taxonomy language.
 - Step titles should sound like a sharp human reviewer wrote them, not like a framework.
@@ -34,14 +41,14 @@ Rules:
 export function buildWalkthroughInput(inputs: StudioInputs): string {
   return JSON.stringify(
     {
-      task: "Create a polished overlay-style resume walkthrough model.",
+      task: "Create a redesigned resume and an overlay-style walkthrough model. The polishedResume must be visibly different from the raw pasted resume while staying factual.",
       resumeText: inputs.resumeText,
       freeformBackgroundText: inputs.aboutText,
       targetRoleOrPlatformDescription: inputs.targetText,
       extraDirectionAndConstraints: inputs.guidanceText,
-      resumeDesignPrompt: inputs.resumeStyleDirection,
-      walkthroughTechniquePrompt: inputs.walkthroughTechniquePrompt,
-      continuityPrompt: inputs.continuityPrompt,
+      resumeDesignPrompt: inputs.resumeStyleDirection || defaultResumeDesignPrompt,
+      walkthroughTechniquePrompt: inputs.walkthroughTechniquePrompt || defaultWalkthroughTechniquePrompt,
+      continuityPrompt: inputs.continuityPrompt || defaultContinuityPrompt,
       verbosity: inputs.verbosity,
       requiredExperience: "The exported HTML should walk a reviewer through how the supplied experience fits the supplied role/platform."
     },
@@ -58,9 +65,9 @@ export function buildStepRevisionInput(inputs: StudioInputs, currentModel: unkno
       freeformBackgroundText: inputs.aboutText,
       targetRoleOrPlatformDescription: inputs.targetText,
       extraDirectionAndConstraints: inputs.guidanceText,
-      resumeDesignPrompt: inputs.resumeStyleDirection,
-      walkthroughTechniquePrompt: inputs.walkthroughTechniquePrompt,
-      continuityPrompt: inputs.continuityPrompt,
+      resumeDesignPrompt: inputs.resumeStyleDirection || defaultResumeDesignPrompt,
+      walkthroughTechniquePrompt: inputs.walkthroughTechniquePrompt || defaultWalkthroughTechniquePrompt,
+      continuityPrompt: inputs.continuityPrompt || defaultContinuityPrompt,
       verbosity: inputs.verbosity,
       currentWalkthroughModel: currentModel,
       stepToRevise: step,
@@ -70,3 +77,12 @@ export function buildStepRevisionInput(inputs: StudioInputs, currentModel: unkno
     2
   );
 }
+
+const defaultResumeDesignPrompt =
+  "Completely redesign the raw pasted source into a beautiful, sendable resume. Use clean hierarchy, professional section order, edited wording, concise bullets, and a polished executive-technical visual rhythm. Do not preserve messy pasted formatting.";
+
+const defaultWalkthroughTechniquePrompt =
+  "Use a guided annotation technique over the rewritten resume: point to one polished line at a time, explain the implication for the role, then move to the next important line.";
+
+const defaultContinuityPrompt =
+  "Make the steps feel like one coherent story from resume evidence to role relevance, not separate generated cards.";

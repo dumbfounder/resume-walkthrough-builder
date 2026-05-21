@@ -657,6 +657,15 @@ function EditPanel({
             <textarea value={selectedStep.evidenceQuote} onChange={(event) => onStepChange({ evidenceQuote: event.target.value })} rows={4} />
           </label>
           <label>
+            Resume highlight text
+            <textarea
+              value={selectedStep.resumeAnchor}
+              onChange={(event) => onStepChange({ resumeAnchor: event.target.value })}
+              rows={3}
+              placeholder="Exact text from the polished resume that should light up during this step."
+            />
+          </label>
+          <label>
             Confidence
             <select value={selectedStep.confidence} onChange={(event) => onStepChange({ confidence: event.target.value as OverlayStep["confidence"] })}>
               <option>high</option>
@@ -740,6 +749,10 @@ function OverlayPreview({
         <strong>{model.targetTitle || "Target role"}</strong>
       </div>
       <div className="resume-tour-canvas">
+        <div className="version-strip" aria-label="Resume versions">
+          <span>Starts with pasted resume</span>
+          <strong>Reveals redesigned resume + walkthrough</strong>
+        </div>
         <ResumeDocument model={model} inputs={inputs} selectedStep={selectedStep} />
         <article className="tour-popover">
           <div className="tour-actions">
@@ -765,7 +778,7 @@ function OverlayPreview({
             ))}
           </div>
           <div className="tour-source">
-            <span>Highlighted source</span>
+            <span>Source evidence</span>
             <p>{selectedStep.evidenceQuote}</p>
           </div>
           <nav className="artifact-dots">
@@ -831,7 +844,7 @@ function ResumeDocument({ model, inputs, selectedStep }: { model: OverlayWalkthr
     <article className="resume-document">
       <header className="resume-head">
         <div>
-          <p>Resume</p>
+          <p>Generated resume</p>
           <h2>{model.polishedResume.name || model.candidateName || "Candidate"}</h2>
         </div>
         <span>{model.polishedResume.headline || model.candidateHeadline || model.targetTitle || "Interactive walkthrough"}</span>
@@ -1063,9 +1076,11 @@ function cleanHeading(line: string): string {
 }
 
 function normalizedFocusQuery(step: OverlayStep): string {
+  const anchor = step.resumeAnchor.trim();
+  if (anchor) return anchor;
   const quote = step.evidenceQuote.trim();
   if (quote && quote !== "Needs source evidence") return quote;
-  return step.resumeAnchor.trim();
+  return "";
 }
 
 function lineMatchesFocus(line: string, query: string): boolean {

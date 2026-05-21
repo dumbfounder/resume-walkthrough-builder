@@ -402,6 +402,30 @@ label {
   padding: clamp(28px, 4vw, 54px);
 }
 
+.version-strip {
+  width: min(760px, 100%);
+  margin: 0 auto 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.version-strip span,
+.version-strip strong {
+  border: 1px solid rgba(32, 38, 45, .12);
+  border-radius: 999px;
+  background: rgba(255, 253, 248, .62);
+  padding: 7px 11px;
+}
+
+.version-strip strong {
+  border-color: rgba(36, 95, 101, .24);
+  color: var(--accent);
+}
+
 .resume-document {
   position: relative;
   width: min(760px, 100%);

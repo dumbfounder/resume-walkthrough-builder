@@ -15,7 +15,7 @@ const anthropicEndpoint = "/api/anthropic-messages";
 
 export async function generateOverlayWalkthrough(request: LlmGenerateRequest): Promise<OverlayWalkthroughModel> {
   const raw = request.provider === "anthropic" ? await callClaudeWalkthrough(request) : await callOpenAiWalkthrough(request);
-  return normalizeWalkthrough(raw);
+  return normalizeWalkthrough(raw, request.inputs);
 }
 
 export async function reviseOverlayStep(request: LlmReviseStepRequest): Promise<OverlayStep> {
@@ -190,7 +190,7 @@ function extractClaudeToolInput(response: unknown, toolName: string): unknown {
   throw new Error("Claude did not return the expected structured tool output.");
 }
 
-function normalizeWalkthrough(value: unknown): OverlayWalkthroughModel {
+function normalizeWalkthrough(value: unknown, inputs?: LlmGenerateRequest["inputs"]): OverlayWalkthroughModel {
   const source = unwrapWalkthrough(value);
   if (!isRecord(source)) {
     throw new Error("Generation returned empty structured output. Regenerate with a current model or try a shorter input.");
@@ -199,10 +199,15 @@ function normalizeWalkthrough(value: unknown): OverlayWalkthroughModel {
   const rawSteps = firstArray(source.steps, source.walkthroughSteps, source.tourSteps);
   const normalizedSteps = rawSteps.length ? rawSteps.map((step, index) => normalizeStep(step, index)) : createFallbackSteps(source);
   const fallbackResume = createFallbackPolishedResume(source);
+  const polishedResume = normalizePolishedResume(source.polishedResume, fallbackResume);
+  if (inputs && isPolishedResumeStillRaw(polishedResume, inputs.resumeText)) {
+    throw new Error("The model mostly copied the pasted resume instead of redesigning it. Add a stronger resume design prompt or use a stronger model, then regenerate.");
+  }
+
   return {
     candidateName: stringField(source.candidateName) || fallbackResume.name,
     candidateHeadline: stringField(source.candidateHeadline) || fallbackResume.headline,
-    polishedResume: normalizePolishedResume(source.polishedResume, fallbackResume),
+    polishedResume,
     targetTitle: stringField(source.targetTitle),
     targetOrganization: stringField(source.targetOrganization),
     reviewerIntro: stringField(source.reviewerIntro),
@@ -281,6 +286,31 @@ function normalizePolishedSections(value: unknown, fallback: PolishedResumeSecti
     }))
     .filter((section) => section.heading || section.lines.length);
   return sections.length ? sections : fallback;
+}
+
+function isPolishedResumeStillRaw(resume: PolishedResume, rawResumeText: string): boolean {
+  const rawLines = rawResumeText
+    .replace(/\r/g, "")
+    .split("\n")
+    .map((line) => normalizeForSimilarity(line))
+    .filter((line) => line.length > 28);
+  if (rawLines.length < 3) return false;
+
+  const polishedLines = [
+    resume.summary,
+    ...resume.sections.flatMap((section) => [section.heading, ...section.lines])
+  ]
+    .map((line) => normalizeForSimilarity(line))
+    .filter((line) => line.length > 28);
+  if (!polishedLines.length) return true;
+
+  const copiedLines = polishedLines.filter((line) => rawLines.some((rawLine) => rawLine === line || rawLine.includes(line) || line.includes(rawLine)));
+  const copyRatio = copiedLines.length / polishedLines.length;
+  return polishedLines.length >= 4 && copyRatio > 0.65;
+}
+
+function normalizeForSimilarity(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9+#.]+/g, " ").replace(/\s+/g, " ").trim();
 }
 
 function createFallbackPolishedResume(value: Record<string, unknown>): PolishedResume {

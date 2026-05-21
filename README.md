@@ -60,8 +60,9 @@ The exported HTML includes:
 - embedded structured JSON data
 - the supplied resume/context needed for the walkthrough
 - standard resume-first opening
+- two resume versions: the starting pasted resume first, then the generated polished resume
 - automatic guided overlay reveal after 3 seconds
-- highlighted source text inside the resume
+- highlighted text inside the generated resume, with source evidence kept separately
 - slightly dimmed non-focused resume text during the tour
 - fit brief mode
 - print CSS
