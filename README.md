@@ -85,6 +85,8 @@ This repo includes a Render web service blueprint. It builds the Vite app and se
 - Build command: `npm ci && npm run build`
 - Start command: `npm start`
 - Magic links expire after 15 minutes.
+- Browser login cookies are signed and last 45 days by default, so deploys and restarts do not force a fresh login.
+- Set `COOKIE_SECRET` in deployment secrets to keep signed cookies stable if email provider keys rotate.
 - Successful logins send a notification email to `LOGIN_NOTIFY_TO`.
 - Email delivery uses `RESEND_API_KEY` or `SENDGRID_API_KEY`.
 - Set `MAGIC_LINK_FROM` to a verified sender for the selected email provider.

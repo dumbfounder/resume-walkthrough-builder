@@ -1,4 +1,4 @@
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { createReadStream, existsSync, mkdirSync, statSync } from "node:fs";
 import { appendFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
@@ -24,9 +24,9 @@ const notifyTo = process.env.LOGIN_NOTIFY_TO || "chris@searchles.com";
 const magicLinkFrom = process.env.MAGIC_LINK_FROM || "Resume Walkthrough Builder <noreply@resume-walkthrough-builder.local>";
 const cookieName = "resume_builder_session";
 const tokenTtlMs = 15 * 60 * 1000;
-const sessionTtlSeconds = 7 * 24 * 60 * 60;
+const sessionTtlSeconds = Number(process.env.SESSION_TTL_SECONDS || 45 * 24 * 60 * 60);
+const cookieSecret = process.env.COOKIE_SECRET || process.env.SENDGRID_API_KEY || "local-dev-cookie-secret-change-me";
 const pendingTokens = new Map();
-const sessions = new Map();
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -151,15 +151,15 @@ async function handleMagicLink(req, res, url) {
   }
 
   pendingTokens.delete(token);
-  const session = randomBytes(32).toString("base64url");
-  sessions.set(session, {
+  const metadata = {
     email: record.email,
     loggedInAt: new Date().toISOString(),
     loginIp: requestIp(req),
     loginUserAgent: String(req.headers["user-agent"] || ""),
     requestIp: record.requestedIp,
     requestUserAgent: record.requestedUserAgent
-  });
+  };
+  const session = signSession(metadata);
   res.statusCode = 303;
   res.setHeader("Set-Cookie", `${cookieName}=${session}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${sessionTtlSeconds}`);
   res.setHeader("Location", "/");
@@ -209,16 +209,45 @@ function getAuthorizedSession(req) {
     .find((part) => part.startsWith(`${cookieName}=`))
     ?.slice(cookieName.length + 1);
   if (!session) return null;
-  for (const [known, metadata] of sessions.entries()) {
-    if (safeEqual(known, session)) return metadata;
-  }
-  return null;
+  return verifySession(session);
 }
 
 function safeEqual(a, b) {
   const left = Buffer.from(a);
   const right = Buffer.from(b);
   return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function signSession(metadata) {
+  const payload = {
+    ...metadata,
+    exp: Math.floor(Date.now() / 1000) + sessionTtlSeconds
+  };
+  const encoded = Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
+  const signature = createHmac("sha256", cookieSecret).update(encoded).digest("base64url");
+  return `${encoded}.${signature}`;
+}
+
+function verifySession(value) {
+  const [encoded, signature] = String(value || "").split(".");
+  if (!encoded || !signature) return null;
+  const expected = createHmac("sha256", cookieSecret).update(encoded).digest("base64url");
+  if (!safeEqual(expected, signature)) return null;
+  try {
+    const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8"));
+    if (!payload || typeof payload.email !== "string") return null;
+    if (typeof payload.exp !== "number" || payload.exp < Math.floor(Date.now() / 1000)) return null;
+    return {
+      email: payload.email,
+      loggedInAt: typeof payload.loggedInAt === "string" ? payload.loggedInAt : "",
+      loginIp: typeof payload.loginIp === "string" ? payload.loginIp : "",
+      loginUserAgent: typeof payload.loginUserAgent === "string" ? payload.loginUserAgent : "",
+      requestIp: typeof payload.requestIp === "string" ? payload.requestIp : "",
+      requestUserAgent: typeof payload.requestUserAgent === "string" ? payload.requestUserAgent : ""
+    };
+  } catch {
+    return null;
+  }
 }
 
 function cleanupExpiredTokens() {

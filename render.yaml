@@ -11,6 +11,12 @@ services:
         value: chris@searchles.com
       - key: MAGIC_LINK_FROM
         value: Resume Walkthrough Builder <noreply@resume-walkthrough-builder.local>
+      - key: PUBLIC_APP_URL
+        value: https://resume-walkthrough-builder.onrender.com
+      - key: SESSION_TTL_SECONDS
+        value: "3888000"
+      - key: COOKIE_SECRET
+        sync: false
       - key: SESSION_S3_BUCKET
         sync: false
       - key: SESSION_S3_PREFIX
