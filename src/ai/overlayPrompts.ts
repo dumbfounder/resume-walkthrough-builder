@@ -116,6 +116,26 @@ export function buildOutputPolishInput(inputs: StudioInputs, currentModel: unkno
   );
 }
 
+export function buildHtmlPolishInput(html: string, instruction: string): string {
+  return JSON.stringify(
+    {
+      task: "Revise the provided standalone HTML file directly. Return the complete replacement HTML file.",
+      rules: [
+        "The returned html must be one complete standalone HTML document starting with <!doctype html> or <html.",
+        "Keep all CSS, JavaScript, and JSON data embedded in the file. Do not introduce CDN links, external fonts, external images, external scripts, tracking, API calls, or backend requirements.",
+        "This is a final-artifact pass. Change CSS, layout, markup, and JavaScript directly when the user asks for design, interaction, layout, or behavior changes.",
+        "Preserve the resume facts, source evidence, and grounded claims already present. Do not invent employers, dates, degrees, projects, metrics, technologies, titles, funding, or outcomes.",
+        "Keep the guided overlay functional: Interactive View starts/restarts the tour, Resume Only View shows the resume/brief without the tutorial, Save as PDF triggers print.",
+        "Keep the file usable by double-clicking locally in a modern browser."
+      ],
+      userInstruction: instruction,
+      html
+    },
+    null,
+    2
+  );
+}
+
 const defaultResumeDesignPrompt =
   "Completely redesign the raw pasted source into a beautiful, sendable resume. Use clean hierarchy, professional section order, edited wording, concise bullets, and a polished executive-technical visual rhythm. Do not preserve messy pasted formatting.";
 

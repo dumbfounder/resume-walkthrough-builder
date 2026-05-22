@@ -92,6 +92,7 @@ export interface StudioState {
   walkthrough: OverlayWalkthroughModel | null;
   outputPrompt: string;
   outputWalkthrough: OverlayWalkthroughModel | null;
+  outputHtml: string | null;
   selectedStepId: string | null;
   selectedMode: "compose" | "edit" | "output" | "preview";
   status: string;
@@ -124,5 +125,13 @@ export interface LlmPolishOutputRequest {
   model: string;
   inputs: StudioInputs;
   walkthrough: OverlayWalkthroughModel;
+  instruction: string;
+}
+
+export interface LlmPolishHtmlRequest {
+  provider: StudioState["provider"];
+  apiKey: string;
+  model: string;
+  html: string;
   instruction: string;
 }

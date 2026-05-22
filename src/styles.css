@@ -436,6 +436,25 @@ label {
   text-transform: uppercase;
 }
 
+.html-preview-frame {
+  min-height: calc(100vh - 150px);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  background: var(--panel);
+  box-shadow: var(--shadow);
+}
+
+.html-preview-frame iframe {
+  width: 100%;
+  height: 100%;
+  min-height: 760px;
+  border: 0;
+  background: white;
+}
+
 .resume-tour-canvas {
   position: relative;
   min-height: 820px;

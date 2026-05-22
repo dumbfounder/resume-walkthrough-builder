@@ -42,8 +42,8 @@ Choose OpenAI or Claude in the app and paste the matching API key. Keys are sent
 - Resume design prompt controls the resume structure, density, hierarchy, and visual tone used by the full regeneration.
 - Walkthrough technique prompt controls how the overlay makes the hiring case, such as guided annotation, board memo, objection handling, founder pitch, recruiter skim, or technical deep dive.
 - Continuity prompt gives the LLM a throughline to maintain across steps.
-- Output-only prompt creates a separate final artifact variant for preview/export. It is saved and reapplied automatically on future full regeneration runs.
-- Output polishing can now change the final artifact's design layer: color palette, highlight color, resume density, type scale, popover width, corner style, and accent stripe.
+- Output-only prompt sends the complete standalone HTML file to the LLM and stores the returned HTML as the preview/export artifact.
+- Output polishing can directly change CSS, layout, markup, JavaScript behavior, color palette, highlight styling, panel structure, mobile behavior, and copy inside the final file.
 
 ## Workflow
 
@@ -54,7 +54,7 @@ Choose OpenAI or Claude in the app and paste the matching API key. Keys are sent
 5. Generate or regenerate everything.
 6. Edit the polished resume and each overlay step directly.
 7. Prompt the LLM to revise a selected step, or use Regenerate everything to rebuild the polished resume and full tour.
-8. Use the Output screen to apply saved export-only polish prompts without changing the base generated model.
+8. Use the Output screen to apply saved export-only polish prompts directly to the generated standalone HTML.
 9. Preview the exact overlay experience.
 10. Export one standalone HTML file.
 

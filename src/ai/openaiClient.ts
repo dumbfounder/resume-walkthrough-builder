@@ -1,7 +1,8 @@
-import { buildOutputPolishInput, buildStepRevisionInput, buildWalkthroughInput, overlaySystemPrompt } from "./overlayPrompts";
+import { buildHtmlPolishInput, buildOutputPolishInput, buildStepRevisionInput, buildWalkthroughInput, overlaySystemPrompt } from "./overlayPrompts";
 import { overlayStepSchema, overlayWalkthroughSchema } from "./overlaySchema";
 import type {
   LlmGenerateRequest,
+  LlmPolishHtmlRequest,
   LlmPolishOutputRequest,
   LlmReviseStepRequest,
   OverlayDetailBlock,
@@ -14,6 +15,16 @@ import type {
 
 const responsesEndpoint = "/api/openai-responses";
 const anthropicEndpoint = "/api/anthropic-messages";
+
+const htmlPolishSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    html: { type: "string" },
+    changeSummary: { type: "string" }
+  },
+  required: ["html", "changeSummary"]
+} as const;
 
 export async function generateOverlayWalkthrough(request: LlmGenerateRequest): Promise<OverlayWalkthroughModel> {
   const raw = request.provider === "anthropic" ? await callClaudeWalkthrough(request) : await callOpenAiWalkthrough(request);
@@ -28,6 +39,11 @@ export async function reviseOverlayStep(request: LlmReviseStepRequest): Promise<
 export async function polishOverlayOutput(request: LlmPolishOutputRequest): Promise<OverlayWalkthroughModel> {
   const raw = request.provider === "anthropic" ? await callClaudeOutputPolish(request) : await callOpenAiOutputPolish(request);
   return normalizeWalkthrough(raw, request.inputs);
+}
+
+export async function polishStandaloneHtml(request: LlmPolishHtmlRequest): Promise<string> {
+  const raw = request.provider === "anthropic" ? await callClaudeHtmlPolish(request) : await callOpenAiHtmlPolish(request);
+  return normalizeHtmlOutput(raw);
 }
 
 async function callOpenAiWalkthrough(request: LlmGenerateRequest): Promise<unknown> {
@@ -96,6 +112,31 @@ This is a final-output polish pass. Return a complete revised walkthrough model.
           name: "resume_overlay_walkthrough",
           strict: true,
           schema: overlayWalkthroughSchema
+        }
+      }
+    }
+  });
+  return extractOpenAiJson(json);
+}
+
+async function callOpenAiHtmlPolish(request: LlmPolishHtmlRequest): Promise<unknown> {
+  const json = await callJsonEndpoint({
+    url: responsesEndpoint,
+    apiKey: request.apiKey,
+    providerName: "OpenAI",
+    body: {
+      model: request.model,
+      instructions: `You are editing a finished standalone HTML resume walkthrough file.
+
+Return only JSON matching the schema. The html field must contain the complete revised HTML file. Preserve local-only constraints and factual credibility.`,
+      input: buildHtmlPolishInput(request.html, request.instruction),
+      store: false,
+      text: {
+        format: {
+          type: "json_schema",
+          name: "standalone_html_polish",
+          strict: true,
+          schema: htmlPolishSchema
         }
       }
     }
@@ -174,6 +215,31 @@ This is a final-output polish pass. Return a complete revised walkthrough model.
     }
   });
   return extractClaudeToolInput(json, "return_resume_overlay_walkthrough");
+}
+
+async function callClaudeHtmlPolish(request: LlmPolishHtmlRequest): Promise<unknown> {
+  const json = await callJsonEndpoint({
+    url: anthropicEndpoint,
+    apiKey: request.apiKey,
+    providerName: "Claude",
+    body: {
+      model: request.model,
+      max_tokens: 12000,
+      system: `You are editing a finished standalone HTML resume walkthrough file.
+
+Return the complete revised HTML in the html tool field. Preserve local-only constraints and factual credibility.`,
+      messages: [{ role: "user", content: buildHtmlPolishInput(request.html, request.instruction) }],
+      tools: [
+        {
+          name: "return_standalone_html",
+          description: "Return the revised standalone HTML artifact.",
+          input_schema: htmlPolishSchema
+        }
+      ],
+      tool_choice: { type: "tool", name: "return_standalone_html" }
+    }
+  });
+  return extractClaudeToolInput(json, "return_standalone_html");
 }
 
 async function callJsonEndpoint({ url, apiKey, body, providerName }: { url: string; apiKey: string; body: unknown; providerName: string }) {
@@ -314,6 +380,22 @@ function unwrapWalkthrough(value: unknown): unknown {
     value.output
   ];
   return candidates.find((candidate) => isRecord(candidate) && (Array.isArray(candidate.steps) || Array.isArray(candidate.walkthroughSteps))) ?? value;
+}
+
+function normalizeHtmlOutput(value: unknown): string {
+  const html = isRecord(value) && typeof value.html === "string" ? value.html.trim() : typeof value === "string" ? value.trim() : "";
+  if (!html) throw new Error("The model did not return revised HTML.");
+  if (!/^<!doctype html>|^<html[\s>]/i.test(html)) {
+    throw new Error("The model did not return a complete standalone HTML document.");
+  }
+  if (/<script\b[^>]*\bsrc\s*=|<link\b[^>]*\bhref\s*=|@import\s+url|url\(\s*["']?https?:\/\//i.test(stripEmbeddedJson(html))) {
+    throw new Error("The revised HTML appears to include external dependencies. Ask for a fully self-contained local file.");
+  }
+  return html;
+}
+
+function stripEmbeddedJson(html: string): string {
+  return html.replace(/<script[^>]*type=["']application\/json["'][\s\S]*?<\/script>/gi, "");
 }
 
 function firstArray(...values: unknown[]): unknown[] {
