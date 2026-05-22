@@ -92,6 +92,7 @@ This repo includes a Render web service blueprint. It builds the Vite app and se
 - Set `MAGIC_LINK_FROM` to a verified sender for the selected email provider.
 - Set `PUBLIC_APP_URL` to the deployed Render URL so links point to the live app.
 - Authenticated editing sessions are backed up through `/api/work-session` while someone works on a resume.
+- On login, the app tries to reload the same project session and falls back to the latest saved session for that email when the browser is new.
 - Server-side work-session backups strip provider API keys before writing.
 - Render stays stateless. Durable session backup uses S3-compatible object storage configured with `SESSION_S3_BUCKET`, `SESSION_S3_PREFIX`, `AWS_REGION`, `AWS_ACCESS_KEY_ID`, and `AWS_SECRET_ACCESS_KEY`.
 - Without S3 settings, local development writes backups under `./data`; Render returns a clear storage-configuration error instead of pretending the session was saved.

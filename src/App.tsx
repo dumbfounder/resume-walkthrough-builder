@@ -6,7 +6,7 @@ import type { ExportDesign, OverlayDetailBlock, OverlayStep, OverlayWalkthroughM
 const STORAGE_KEY = "resume-overlay-studio:v3";
 const KEY_STORAGE_KEY = "resume-overlay-studio:provider-keys:v2";
 const PROJECT_SESSION_KEY = "resume-overlay-studio:project-session-id:v1";
-const DRAFT_SCHEMA_VERSION = 10;
+const DRAFT_SCHEMA_VERSION = 11;
 
 const resumeTemplateOptions: { value: StudioInputs["resumeTemplate"]; label: string; note: string }[] = [
   { value: "executiveBriefing", label: "Executive Briefing", note: "Crisp, premium, CEO-readable" },
@@ -77,18 +77,33 @@ export default function App() {
     setState((current) => ({
       ...current,
       draftSchemaVersion: DRAFT_SCHEMA_VERSION,
-      walkthrough: null,
-      selectedStepId: null,
-      selectedMode: "compose",
-      outputWalkthrough: null,
-      outputHtml: null,
       isGenerating: false,
       isRevising: false,
       isPolishingOutput: false,
       error: "",
-      status: "App updated. Your pasted inputs were kept, and the stale generated walkthrough was cleared automatically."
+      status: "App updated. Your saved resume session was kept."
     }));
   }, [state.draftSchemaVersion]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    loadServerWorkSession(projectSessionId.current, controller.signal).then((result) => {
+      if (!result) return;
+      if (result.projectId) {
+        projectSessionId.current = result.projectId;
+        writeProjectSessionId(result.projectId);
+      }
+      setState((current) => {
+        if (hasMeaningfulDraft(current)) {
+          setBackupStatus(`Saved session available from ${new Date(result.savedAt).toLocaleTimeString()}. Local draft kept.`);
+          return current;
+        }
+        setBackupStatus(`Loaded saved session from ${new Date(result.savedAt).toLocaleTimeString()}`);
+        return restoreSavedState(result.state, current, "Loaded your saved resume session.");
+      });
+    });
+    return () => controller.abort();
+  }, []);
 
   useEffect(() => {
     const { openaiApiKey: _openaiApiKey, anthropicApiKey: _anthropicApiKey, ...persistable } = state;
@@ -152,25 +167,39 @@ export default function App() {
         model: resolveModelForProvider(state.provider, state.model),
         inputs: state.inputs
       });
-      const outputHtml = currentOutputPrompt(state)
-        ? await polishStandaloneHtml({
-            provider: state.provider,
-            apiKey: activeApiKey(state),
-            model: resolveModelForProvider(state.provider, state.model),
-            html: buildOverlayHtml(walkthrough, state.inputs),
-            instruction: currentOutputPrompt(state)
-          })
-        : null;
+      let outputHtml: string | null = null;
+      let html = buildOverlayHtml(walkthrough, state.inputs);
+      const initialDesignInstruction = initialHtmlDesignInstruction(state.inputs);
+      if (initialDesignInstruction) {
+        html = await polishStandaloneHtml({
+          provider: state.provider,
+          apiKey: activeApiKey(state),
+          model: resolveModelForProvider(state.provider, state.model),
+          html,
+          instruction: initialDesignInstruction
+        });
+        outputHtml = html;
+      }
+      if (currentOutputPrompt(state)) {
+        html = await polishStandaloneHtml({
+          provider: state.provider,
+          apiKey: activeApiKey(state),
+          model: resolveModelForProvider(state.provider, state.model),
+          html,
+          instruction: currentOutputPrompt(state)
+        });
+        outputHtml = html;
+      }
       setState((current) => ({
         ...current,
         walkthrough,
         outputWalkthrough: null,
         outputHtml,
         selectedStepId: walkthrough.steps[0]?.id ?? null,
-        selectedMode: current.outputPrompt.trim() ? "output" : "edit",
+        selectedMode: outputHtml ? "output" : "edit",
         isGenerating: false,
-        status: current.outputPrompt.trim()
-          ? "Everything regenerated and the saved output prompt was reapplied."
+        status: outputHtml
+          ? "Everything regenerated and the design/output prompts were applied directly to the standalone HTML."
           : "Everything regenerated. Edit the resume and steps until the artifact feels right."
       }));
     } catch (error) {
@@ -1150,54 +1179,69 @@ function loadState(): StudioState {
     const saved = localStorage.getItem(STORAGE_KEY);
     const savedKeys = readSavedKeys();
     if (!saved) return { ...emptyState, ...savedKeys, saveKey: Boolean(savedKeys.openaiApiKey || savedKeys.anthropicApiKey) };
-    const parsed = JSON.parse(saved) as Partial<StudioState>;
-    const provider = parsed.provider ?? "openai";
-    const model = resolveModelForProvider(provider, parsed.model);
-    const rawInputs = (parsed.inputs ?? {}) as Partial<StudioInputs>;
-    const legacyVerbosity = rawInputs.verbosity ?? "balanced";
-    const inputs = {
-      ...emptyInputs,
-      ...rawInputs,
-      resumeVerbosity: rawInputs.resumeVerbosity ?? "balanced",
-      walkthroughVerbosity: rawInputs.walkthroughVerbosity ?? legacyVerbosity,
-      resumeTemplate: rawInputs.resumeTemplate ?? "executiveBriefing"
-    };
-    const migratedWalkthrough = parsed.walkthrough ? migrateWalkthrough(parsed.walkthrough) : null;
-    const migratedOutputWalkthrough = parsed.outputWalkthrough ? migrateWalkthrough(parsed.outputWalkthrough) : null;
-    const savedVersion = typeof parsed.draftSchemaVersion === "number" ? parsed.draftSchemaVersion : 0;
-    const staleWalkthrough = Boolean(migratedWalkthrough) && (savedVersion < DRAFT_SCHEMA_VERSION || !isWalkthroughCompatible(migratedWalkthrough));
-    const walkthrough = staleWalkthrough ? null : migratedWalkthrough;
-    const outputWalkthrough = staleWalkthrough || !isWalkthroughCompatible(migratedOutputWalkthrough) ? null : migratedOutputWalkthrough;
-    const selectedStepId = walkthrough?.steps.some((step) => step.id === parsed.selectedStepId) ? parsed.selectedStepId ?? null : walkthrough?.steps[0]?.id ?? null;
-    const selectedMode = staleWalkthrough ? "compose" : parsed.selectedMode ?? emptyState.selectedMode;
-    const status = staleWalkthrough
-      ? "App updated. Your pasted inputs were kept, and the stale generated walkthrough was cleared automatically."
-      : parsed.status || emptyState.status;
-
-    return {
-      ...emptyState,
-      ...parsed,
-      ...savedKeys,
-      draftSchemaVersion: DRAFT_SCHEMA_VERSION,
-      provider,
-      model,
-      saveKey: Boolean(savedKeys.openaiApiKey || savedKeys.anthropicApiKey),
-      inputs,
-      walkthrough,
-      outputPrompt: typeof parsed.outputPrompt === "string" ? parsed.outputPrompt : "",
-      outputWalkthrough,
-      outputHtml: typeof parsed.outputHtml === "string" ? parsed.outputHtml : null,
-      selectedStepId,
-      selectedMode,
-      status,
-      isGenerating: false,
-      isRevising: false,
-      isPolishingOutput: false,
-      error: ""
-    };
+    return normalizeSavedState(JSON.parse(saved) as Partial<StudioState>, savedKeys);
   } catch {
     return emptyState;
   }
+}
+
+function normalizeSavedState(
+  parsed: Partial<StudioState>,
+  savedKeys: Pick<StudioState, "openaiApiKey" | "anthropicApiKey">,
+  statusOverride = ""
+): StudioState {
+  const provider = parsed.provider ?? "openai";
+  const model = resolveModelForProvider(provider, parsed.model);
+  const rawInputs = (parsed.inputs ?? {}) as Partial<StudioInputs>;
+  const legacyVerbosity = rawInputs.verbosity ?? "balanced";
+  const inputs = {
+    ...emptyInputs,
+    ...rawInputs,
+    resumeVerbosity: rawInputs.resumeVerbosity ?? "balanced",
+    walkthroughVerbosity: rawInputs.walkthroughVerbosity ?? legacyVerbosity,
+    resumeTemplate: rawInputs.resumeTemplate ?? "executiveBriefing"
+  };
+  const migratedWalkthrough = parsed.walkthrough ? migrateWalkthrough(parsed.walkthrough) : null;
+  const migratedOutputWalkthrough = parsed.outputWalkthrough ? migrateWalkthrough(parsed.outputWalkthrough) : null;
+  const incompatibleWalkthrough = Boolean(migratedWalkthrough) && !isWalkthroughCompatible(migratedWalkthrough);
+  const walkthrough = incompatibleWalkthrough ? null : migratedWalkthrough;
+  const outputWalkthrough = !isWalkthroughCompatible(migratedOutputWalkthrough) ? null : migratedOutputWalkthrough;
+  const selectedStepId = walkthrough?.steps.some((step) => step.id === parsed.selectedStepId) ? parsed.selectedStepId ?? null : walkthrough?.steps[0]?.id ?? null;
+  const selectedMode = incompatibleWalkthrough ? "compose" : parsed.selectedMode ?? emptyState.selectedMode;
+  const status = statusOverride || (incompatibleWalkthrough ? "Saved draft was missing required walkthrough structure, so the pasted inputs were kept." : parsed.status || emptyState.status);
+
+  return {
+    ...emptyState,
+    ...parsed,
+    ...savedKeys,
+    draftSchemaVersion: DRAFT_SCHEMA_VERSION,
+    provider,
+    model,
+    saveKey: Boolean(savedKeys.openaiApiKey || savedKeys.anthropicApiKey),
+    inputs,
+    walkthrough,
+    outputPrompt: typeof parsed.outputPrompt === "string" ? parsed.outputPrompt : "",
+    outputWalkthrough,
+    outputHtml: typeof parsed.outputHtml === "string" && parsed.outputHtml.trim() ? parsed.outputHtml : null,
+    selectedStepId,
+    selectedMode,
+    status,
+    isGenerating: false,
+    isRevising: false,
+    isPolishingOutput: false,
+    error: ""
+  };
+}
+
+function restoreSavedState(savedState: Partial<StudioState>, current: StudioState, status: string): StudioState {
+  return normalizeSavedState(
+    savedState,
+    {
+      openaiApiKey: current.openaiApiKey,
+      anthropicApiKey: current.anthropicApiKey
+    },
+    status
+  );
 }
 
 function readProjectSessionId(): string {
@@ -1208,8 +1252,12 @@ function readProjectSessionId(): string {
 
 function createProjectSessionId(): string {
   const generated = crypto.randomUUID ? crypto.randomUUID() : `project-${Date.now()}-${Math.random().toString(16).slice(2)}`;
-  localStorage.setItem(PROJECT_SESSION_KEY, generated);
+  writeProjectSessionId(generated);
   return generated;
+}
+
+function writeProjectSessionId(projectId: string) {
+  localStorage.setItem(PROJECT_SESSION_KEY, projectId);
 }
 
 function hasMeaningfulDraft(state: StudioState): boolean {
@@ -1218,7 +1266,12 @@ function hasMeaningfulDraft(state: StudioState): boolean {
       state.inputs.aboutText.trim() ||
       state.inputs.targetText.trim() ||
       state.inputs.guidanceText.trim() ||
-      state.walkthrough
+      state.inputs.resumeStyleDirection.trim() ||
+      state.inputs.walkthroughTechniquePrompt.trim() ||
+      state.inputs.continuityPrompt.trim() ||
+      state.outputPrompt.trim() ||
+      state.walkthrough ||
+      state.outputHtml
   );
 }
 
@@ -1229,6 +1282,7 @@ async function saveServerWorkSession(projectId: string, state: StudioState, sign
       anthropicApiKey: _anthropicApiKey,
       isGenerating: _isGenerating,
       isRevising: _isRevising,
+      isPolishingOutput: _isPolishingOutput,
       error: _error,
       ...persistable
     } = state;
@@ -1244,6 +1298,7 @@ async function saveServerWorkSession(projectId: string, state: StudioState, sign
           saveKey: false,
           isGenerating: false,
           isRevising: false,
+          isPolishingOutput: false,
           error: ""
         }
       }),
@@ -1261,6 +1316,28 @@ async function saveServerWorkSession(projectId: string, state: StudioState, sign
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") return null;
     return { ok: false, error: "Session backup failed." };
+  }
+}
+
+async function loadServerWorkSession(projectId: string, signal: AbortSignal): Promise<{ projectId: string; savedAt: string; state: Partial<StudioState> } | null> {
+  try {
+    const response = await fetch(`/api/work-session?projectId=${encodeURIComponent(projectId)}`, {
+      method: "GET",
+      cache: "no-store",
+      signal
+    });
+    if (response.status === 401 || response.status === 404) return null;
+    if (!response.ok) return null;
+    const data = (await response.json()) as { projectId?: string; savedAt?: string; state?: Partial<StudioState> };
+    if (!data.state) return null;
+    return {
+      projectId: data.projectId || projectId,
+      savedAt: data.savedAt || new Date().toISOString(),
+      state: data.state
+    };
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") return null;
+    return null;
   }
 }
 
@@ -1373,6 +1450,20 @@ function activeApiKey(state: StudioState): string {
 
 function currentOutputPrompt(state: StudioState): string {
   return state.outputPrompt.trim();
+}
+
+function initialHtmlDesignInstruction(inputs: StudioInputs): string {
+  const direction = inputs.resumeStyleDirection.trim();
+  if (!direction) return "";
+  return [
+    "Apply the initial resume design and look-and-feel direction directly to this complete standalone HTML file.",
+    "Edit the CSS, layout, markup, spacing, typography, colors, overlay panel sizing, mobile behavior, and print styling as needed.",
+    "Keep the resume facts and source evidence grounded in the provided inputs, and preserve the guided overlay interactions.",
+    `Resume design direction: ${direction}`,
+    `Selected resume template: ${inputs.resumeTemplate}`,
+    `Resume detail level: ${inputs.resumeVerbosity}`,
+    `Walkthrough depth: ${inputs.walkthroughVerbosity}`
+  ].join("\n");
 }
 
 function defaultModelForProvider(provider: StudioState["provider"]): string {

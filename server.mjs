@@ -1,6 +1,6 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { createReadStream, existsSync, mkdirSync, statSync } from "node:fs";
-import { appendFile, writeFile } from "node:fs/promises";
+import { appendFile, readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -77,6 +77,11 @@ createServer(async (req, res) => {
 
     if (url.pathname === "/api/work-session" && req.method === "POST") {
       await saveWorkSession(req, res, authorizedSession);
+      return;
+    }
+
+    if (url.pathname === "/api/work-session" && req.method === "GET") {
+      await getWorkSession(req, res, authorizedSession, url);
       return;
     }
 
@@ -377,7 +382,7 @@ async function saveWorkSession(req, res, authorizedSession) {
     return;
   }
 
-  const body = await readBody(req, 2_500_000);
+  const body = await readBody(req, 15_000_000);
   let payload;
   try {
     payload = JSON.parse(body.toString("utf8"));
@@ -409,10 +414,28 @@ async function saveWorkSession(req, res, authorizedSession) {
   });
 }
 
+async function getWorkSession(req, res, authorizedSession, url) {
+  const projectId = safeId(url.searchParams.get("projectId") || "latest");
+  const record = await readWorkSessionRecord(authorizedSession.email, projectId);
+  if (!record?.state) {
+    sendJson(res, 404, { error: "No saved resume session found." });
+    return;
+  }
+
+  sendJson(res, 200, {
+    ok: true,
+    savedAt: record.savedAt,
+    projectId: record.projectId,
+    email: authorizedSession.email,
+    state: sanitizeStudioState(record.state)
+  });
+}
+
 async function writeWorkSessionRecord(email, projectId, record) {
   const userId = safeId(email);
   if (s3Client && s3Bucket) {
     const latestKey = `${s3Prefix}/${userId}/${projectId}.latest.json`;
+    const userLatestKey = `${s3Prefix}/${userId}/latest.json`;
     const logKey = `${s3Prefix}/${userId}/${projectId}.jsonl`;
     const previousLog = await readS3Text(logKey);
     await Promise.all([
@@ -420,6 +443,14 @@ async function writeWorkSessionRecord(email, projectId, record) {
         new PutObjectCommand({
           Bucket: s3Bucket,
           Key: latestKey,
+          Body: `${JSON.stringify(record, null, 2)}\n`,
+          ContentType: "application/json; charset=utf-8"
+        })
+      ),
+      s3Client.send(
+        new PutObjectCommand({
+          Bucket: s3Bucket,
+          Key: userLatestKey,
           Body: `${JSON.stringify(record, null, 2)}\n`,
           ContentType: "application/json; charset=utf-8"
         })
@@ -444,11 +475,52 @@ async function writeWorkSessionRecord(email, projectId, record) {
   const userDir = join(sessionsDir, userId);
   mkdirSync(userDir, { recursive: true });
   const latestPath = safeJoin(userDir, `${projectId}.latest.json`);
+  const userLatestPath = safeJoin(userDir, "latest.json");
   const logPath = safeJoin(userDir, `${projectId}.jsonl`);
   await Promise.all([
     writeFile(latestPath, `${JSON.stringify(record, null, 2)}\n`),
+    writeFile(userLatestPath, `${JSON.stringify(record, null, 2)}\n`),
     appendFile(logPath, `${JSON.stringify(record)}\n`)
   ]);
+}
+
+async function readWorkSessionRecord(email, projectId) {
+  const userId = safeId(email);
+  if (s3Client && s3Bucket) {
+    const exactKey = `${s3Prefix}/${userId}/${projectId}.latest.json`;
+    const latestKey = `${s3Prefix}/${userId}/latest.json`;
+    const exactText = projectId && projectId !== "latest" ? await readS3Text(exactKey) : "";
+    const text = exactText || (await readS3Text(latestKey));
+    return parseSessionRecord(text);
+  }
+
+  if (process.env.RENDER) return null;
+
+  const userDir = join(sessionsDir, userId);
+  const exactPath = safeJoin(userDir, `${projectId}.latest.json`);
+  const latestPath = safeJoin(userDir, "latest.json");
+  const exactText = projectId && projectId !== "latest" ? await readFileIfExists(exactPath) : "";
+  const text = exactText || (await readFileIfExists(latestPath));
+  return parseSessionRecord(text);
+}
+
+async function readFileIfExists(path) {
+  try {
+    return await readFile(path, "utf8");
+  } catch (error) {
+    if (error?.code === "ENOENT") return "";
+    throw error;
+  }
+}
+
+function parseSessionRecord(text) {
+  if (!text) return null;
+  try {
+    const parsed = JSON.parse(text);
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 async function readS3Text(key) {
@@ -469,6 +541,7 @@ function sanitizeStudioState(state) {
     anthropicApiKey: _anthropicApiKey,
     isGenerating: _isGenerating,
     isRevising: _isRevising,
+    isPolishingOutput: _isPolishingOutput,
     error: _error,
     ...safeState
   } = state;
@@ -479,6 +552,7 @@ function sanitizeStudioState(state) {
     saveKey: false,
     isGenerating: false,
     isRevising: false,
+    isPolishingOutput: false,
     error: ""
   };
 }
