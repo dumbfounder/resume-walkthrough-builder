@@ -6,14 +6,18 @@ services:
     buildCommand: npm ci && npm run build
     startCommand: npm start
     healthCheckPath: /healthz
-    disk:
-      name: resume-work-sessions
-      mountPath: /var/data/resume-work-sessions
-      sizeGB: 1
     envVars:
-      - key: DATA_DIR
-        value: /var/data/resume-work-sessions
       - key: LOGIN_NOTIFY_TO
         value: chris@searchles.com
       - key: MAGIC_LINK_FROM
         value: Resume Walkthrough Builder <noreply@resume-walkthrough-builder.local>
+      - key: SESSION_S3_BUCKET
+        sync: false
+      - key: SESSION_S3_PREFIX
+        value: resume-work-sessions
+      - key: AWS_REGION
+        sync: false
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false

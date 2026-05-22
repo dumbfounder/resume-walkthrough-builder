@@ -4,11 +4,21 @@ import { appendFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { GetObjectCommand, PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const distDir = join(root, "dist");
 const dataDir = process.env.DATA_DIR || join(root, "data");
 const sessionsDir = join(dataDir, "work-sessions");
+const s3Bucket = process.env.SESSION_S3_BUCKET || "";
+const s3Prefix = String(process.env.SESSION_S3_PREFIX || "resume-work-sessions").replace(/^\/+|\/+$/g, "");
+const s3Client = s3Bucket
+  ? new S3Client({
+      region: process.env.AWS_REGION || process.env.SESSION_S3_REGION || "us-east-1",
+      endpoint: process.env.SESSION_S3_ENDPOINT || undefined,
+      forcePathStyle: process.env.SESSION_S3_FORCE_PATH_STYLE === "true"
+    })
+  : null;
 const port = Number(process.env.PORT || 4173);
 const notifyTo = process.env.LOGIN_NOTIFY_TO || "chris@searchles.com";
 const magicLinkFrom = process.env.MAGIC_LINK_FROM || "Resume Walkthrough Builder <noreply@resume-walkthrough-builder.local>";
@@ -360,17 +370,7 @@ async function saveWorkSession(req, res, authorizedSession) {
     state: sanitizeStudioState(payload.state)
   };
 
-  mkdirSync(sessionsDir, { recursive: true });
-  const userDir = join(sessionsDir, safeId(authorizedSession.email));
-  mkdirSync(userDir, { recursive: true });
-
-  const latestPath = safeJoin(userDir, `${projectId}.latest.json`);
-  const logPath = safeJoin(userDir, `${projectId}.jsonl`);
-  const data = JSON.stringify(record);
-  await Promise.all([
-    writeFile(latestPath, `${JSON.stringify(record, null, 2)}\n`),
-    appendFile(logPath, `${data}\n`)
-  ]);
+  await writeWorkSessionRecord(authorizedSession.email, projectId, record);
 
   sendJson(res, 200, {
     ok: true,
@@ -378,6 +378,59 @@ async function saveWorkSession(req, res, authorizedSession) {
     projectId,
     email: authorizedSession.email
   });
+}
+
+async function writeWorkSessionRecord(email, projectId, record) {
+  const userId = safeId(email);
+  if (s3Client && s3Bucket) {
+    const latestKey = `${s3Prefix}/${userId}/${projectId}.latest.json`;
+    const logKey = `${s3Prefix}/${userId}/${projectId}.jsonl`;
+    const previousLog = await readS3Text(logKey);
+    await Promise.all([
+      s3Client.send(
+        new PutObjectCommand({
+          Bucket: s3Bucket,
+          Key: latestKey,
+          Body: `${JSON.stringify(record, null, 2)}\n`,
+          ContentType: "application/json; charset=utf-8"
+        })
+      ),
+      s3Client.send(
+        new PutObjectCommand({
+          Bucket: s3Bucket,
+          Key: logKey,
+          Body: `${previousLog}${JSON.stringify(record)}\n`,
+          ContentType: "application/x-ndjson; charset=utf-8"
+        })
+      )
+    ]);
+    return;
+  }
+
+  if (process.env.RENDER) {
+    throw new Error("Durable session storage is not configured. Set SESSION_S3_BUCKET and AWS credentials.");
+  }
+
+  mkdirSync(sessionsDir, { recursive: true });
+  const userDir = join(sessionsDir, userId);
+  mkdirSync(userDir, { recursive: true });
+  const latestPath = safeJoin(userDir, `${projectId}.latest.json`);
+  const logPath = safeJoin(userDir, `${projectId}.jsonl`);
+  await Promise.all([
+    writeFile(latestPath, `${JSON.stringify(record, null, 2)}\n`),
+    appendFile(logPath, `${JSON.stringify(record)}\n`)
+  ]);
+}
+
+async function readS3Text(key) {
+  try {
+    const response = await s3Client.send(new GetObjectCommand({ Bucket: s3Bucket, Key: key }));
+    return await response.Body.transformToString();
+  } catch (error) {
+    const name = error && typeof error === "object" ? error.name : "";
+    if (name === "NoSuchKey" || name === "NotFound") return "";
+    throw error;
+  }
 }
 
 function sanitizeStudioState(state) {

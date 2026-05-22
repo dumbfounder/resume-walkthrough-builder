@@ -11,6 +11,7 @@
     "lint": "tsc --noEmit"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1052.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1"
   },
