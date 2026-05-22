@@ -76,33 +76,33 @@ button { font: inherit; }
   z-index: 20;
   width: min(1080px, calc(100% - 36px));
   transform: translateX(-50%);
-  display: flex;
-  justify-content: space-between;
-  gap: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
   align-items: center;
   border: 1px solid color-mix(in srgb, var(--border) 82%, var(--text));
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--paper) 92%, transparent);
+  border-radius: var(--topbar-radius, 18px);
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
   box-shadow: 0 18px 50px color-mix(in srgb, var(--text) 14%, transparent);
-  padding: 8px 10px 8px 16px;
+  padding: 12px 14px 12px 18px;
   backdrop-filter: blur(16px);
 }
 .brand {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 12px;
-  align-items: center;
+  display: grid;
+  min-width: 0;
+  gap: 3px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 13px;
 }
 .brand strong {
   color: var(--accent);
-  letter-spacing: .08em;
+  letter-spacing: .14em;
   text-transform: uppercase;
+  font-size: 12px;
 }
 .controls {
   display: flex;
-  gap: 7px;
+  gap: 8px;
   align-items: center;
 }
 .controls button,
@@ -110,9 +110,11 @@ button { font: inherit; }
 .start-button {
   border: 1px solid var(--border);
   border-radius: 999px;
-  background: color-mix(in srgb, var(--paper) 92%, transparent);
+  background: color-mix(in srgb, var(--paper) 94%, transparent);
   color: var(--text);
-  padding: 8px 12px;
+  min-width: 116px;
+  padding: 10px 16px;
+  font-weight: 700;
   cursor: pointer;
 }
 .controls button.active,
@@ -120,7 +122,7 @@ button { font: inherit; }
 .start-button {
   border-color: var(--accent);
   background: var(--accent);
-  color: white;
+  color: var(--paper);
 }
 .resume-stage {
   position: relative;
@@ -460,7 +462,7 @@ button { font: inherit; }
   width: min(90vw, 1600px);
   transform: none;
   margin: 0 auto 18px;
-  border-radius: 18px;
+  border-radius: var(--topbar-radius, 18px);
 }
 .resume-stage {
   display: grid;
@@ -893,9 +895,9 @@ function exportJs(): string {
     root.innerHTML =
       '<main class="artifact-shell">' +
         '<div class="topbar">' +
-          '<div class="brand"><strong>Candidate Fit</strong><span>' + esc(model.targetTitle || "Role review") + '</span><span>' + esc(model.targetOrganization || "Hiring brief") + '</span></div>' +
+          '<div class="brand"><strong>' + esc((model.polishedResume && model.polishedResume.name) || model.candidateName || rawResumeTitle()) + '</strong><span>' + esc(((model.polishedResume && model.polishedResume.headline) || model.candidateHeadline || model.targetTitle || "Tailored resume")) + '</span></div>' +
           '<div class="controls">' +
-            button("walk", "Walkthrough") + button("brief", "Fit brief") + '<button type="button" data-print>Print</button>' +
+            button("walk", "Interactive View") + button("brief", "Resume Only View") + '<button type="button" data-print>Save as PDF</button>' +
           '</div>' +
         '</div>' +
         '<section class="resume-stage">' +
@@ -1006,8 +1008,9 @@ function exportJs(): string {
       '<section><h3>Gaps to handle honestly</h3><ul>' + (model.gaps || []).map(item => '<li>' + esc(item) + '</li>').join("") + '</ul></section>' +
     '</section>';
   }
-  function startTour() {
+  function startTour(reset) {
     window.clearTimeout(timer);
+    if (reset) active = 0;
     promptVisible = false;
     tourActive = true;
     mode = "walk";
@@ -1046,7 +1049,7 @@ function exportJs(): string {
   root.addEventListener("click", function (event) {
     const target = event.target;
     if (!target || !target.matches) return;
-    if (target.matches("[data-start]")) startTour();
+    if (target.matches("[data-start]")) startTour(true);
     if (target.matches("[data-print]")) window.print();
     if (target.matches("[data-next]")) {
       active = Math.min(steps.length - 1, active + 1);
@@ -1060,7 +1063,7 @@ function exportJs(): string {
     }
     if (target.matches("[data-mode]")) {
       mode = target.getAttribute("data-mode");
-      if (mode === "walk") startTour();
+      if (mode === "walk") { followFocusedEvidence = true; startTour(true); }
       else render();
     }
     if (target.matches("[data-step]")) {
