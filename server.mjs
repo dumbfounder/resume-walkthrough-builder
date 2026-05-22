@@ -404,7 +404,14 @@ async function saveWorkSession(req, res, authorizedSession) {
     state: sanitizeStudioState(payload.state)
   };
 
-  await writeWorkSessionRecord(authorizedSession.email, projectId, record);
+  const saved = await writeWorkSessionRecord(authorizedSession.email, projectId, record);
+  if (!saved) {
+    sendJson(res, 503, {
+      ok: false,
+      error: "Durable session storage is not configured. Browser localStorage is still active."
+    });
+    return;
+  }
 
   sendJson(res, 200, {
     ok: true,
@@ -464,11 +471,11 @@ async function writeWorkSessionRecord(email, projectId, record) {
         })
       )
     ]);
-    return;
+    return true;
   }
 
   if (process.env.RENDER) {
-    throw new Error("Durable session storage is not configured. Set SESSION_S3_BUCKET and AWS credentials.");
+    return false;
   }
 
   mkdirSync(sessionsDir, { recursive: true });
@@ -482,6 +489,7 @@ async function writeWorkSessionRecord(email, projectId, record) {
     writeFile(userLatestPath, `${JSON.stringify(record, null, 2)}\n`),
     appendFile(logPath, `${JSON.stringify(record)}\n`)
   ]);
+  return true;
 }
 
 async function readWorkSessionRecord(email, projectId) {
