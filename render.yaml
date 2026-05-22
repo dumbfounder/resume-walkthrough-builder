@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: resume-walkthrough-builder
+    env: node
+    plan: starter
+    buildCommand: npm ci && npm run build
+    startCommand: npm start
+    healthCheckPath: /healthz
+    envVars:
+      - key: SITE_PASSWORD
+        value: AIROCKS

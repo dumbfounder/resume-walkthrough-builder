@@ -3,9 +3,9 @@ import { generateOverlayWalkthrough, reviseOverlayStep } from "./ai/openaiClient
 import { buildOverlayHtml } from "./export/overlayHtmlExporter";
 import type { OverlayDetailBlock, OverlayStep, OverlayWalkthroughModel, PolishedResume, StudioInputs, StudioState } from "./types/overlay";
 
-const STORAGE_KEY = "resume-overlay-studio:v2";
-const KEY_STORAGE_KEY = "resume-overlay-studio:provider-keys";
-const DRAFT_SCHEMA_VERSION = 6;
+const STORAGE_KEY = "resume-overlay-studio:v3";
+const KEY_STORAGE_KEY = "resume-overlay-studio:provider-keys:v2";
+const DRAFT_SCHEMA_VERSION = 7;
 
 const resumeTemplateOptions: { value: StudioInputs["resumeTemplate"]; label: string; note: string }[] = [
   { value: "executiveBriefing", label: "Executive Briefing", note: "Crisp, premium, CEO-readable" },

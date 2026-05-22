@@ -15,7 +15,7 @@ export function buildOverlayHtml(model: OverlayWalkthroughModel, inputs: StudioI
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>${escapeHtml(title)}</title>
 <style>${exportCss()}</style>
 </head>
@@ -460,6 +460,72 @@ button { font: inherit; }
 .empty-resume {
   color: var(--muted);
 }
+.topbar {
+  position: sticky;
+  top: 14px;
+  left: auto;
+  z-index: 30;
+  width: min(90vw, 1600px);
+  transform: none;
+  margin: 0 auto 18px;
+  border-radius: 18px;
+}
+.resume-stage {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);
+  gap: clamp(18px, 2.4vw, 32px);
+  align-items: start;
+  width: min(90vw, 1600px);
+  margin: 0 auto;
+}
+.resume-wrap {
+  min-width: 0;
+}
+.walkthrough-wrap {
+  position: sticky;
+  top: 92px;
+  display: grid;
+  gap: 14px;
+  align-content: start;
+  align-self: start;
+  min-width: 0;
+  max-height: calc(100dvh - 112px);
+}
+.tour-active .resume-document {
+  transform: none;
+}
+.launch-note {
+  position: relative;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  margin: 0;
+}
+.resume-first .launch-note {
+  display: none;
+}
+.resume-first.prompt-visible .launch-note {
+  display: block;
+}
+.tour-active .launch-note,
+.mode-brief .launch-note {
+  display: none;
+}
+.tour-popover {
+  position: relative;
+  top: auto;
+  right: auto;
+  width: 100%;
+  max-height: calc(100dvh - 112px);
+  overflow: auto;
+  transform: translateY(12px);
+}
+.tour-active .tour-popover {
+  transform: none;
+}
+.resume-first .tour-popover {
+  display: none;
+}
 @media (max-width: 980px) {
   .topbar {
     position: static;
@@ -512,6 +578,165 @@ button { font: inherit; }
     flex-wrap: wrap;
   }
 }
+@media (max-width: 720px) {
+  html,
+  body,
+  #walkthrough-root {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+  }
+  #walkthrough-root * {
+    max-width: 100%;
+  }
+  .artifact-shell {
+    width: 100%;
+    max-width: 100vw;
+    margin: 0 auto;
+    overflow-x: hidden;
+    padding: 10px 10px max(22px, env(safe-area-inset-bottom));
+  }
+  .tour-active .artifact-shell {
+    height: 100dvh;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    overflow: hidden;
+  }
+  .topbar {
+    position: sticky;
+    top: 8px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+    width: 100%;
+    margin-bottom: 10px;
+    border-radius: 16px;
+    padding: 10px;
+    overflow: hidden;
+  }
+  .tour-active .topbar {
+    position: relative;
+    top: 0;
+  }
+  .brand {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+  }
+  .brand span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .controls {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    width: 100%;
+    gap: 7px;
+  }
+  .controls [data-print] {
+    grid-column: 1 / -1;
+  }
+  .controls button {
+    min-width: 0;
+    min-height: 42px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .resume-stage {
+    display: block;
+    width: 100%;
+    max-width: none;
+    overflow-x: hidden;
+  }
+  .resume-first .resume-stage {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .resume-first .walkthrough-wrap {
+    position: relative;
+    top: auto;
+    order: -1;
+    max-height: none;
+  }
+  .tour-active .resume-stage {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+    height: 100%;
+    max-width: calc(100vw - 20px);
+    min-height: 0;
+    overflow: hidden;
+  }
+  .resume-wrap,
+  .walkthrough-wrap,
+  .resume-document {
+    width: 100%;
+    max-width: none;
+    min-width: 0;
+    overflow-x: hidden;
+  }
+  .tour-active .resume-wrap,
+  .tour-active .walkthrough-wrap {
+    position: relative;
+    top: auto;
+    height: 100%;
+    max-height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .tour-active .resume-wrap {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tour-active .walkthrough-wrap {
+    display: block;
+  }
+  .resume-document {
+    min-height: 0;
+    padding: 28px 20px 30px 24px;
+  }
+  .tour-active .resume-line.dim,
+  .tour-active .resume-section h2 {
+    opacity: .36;
+  }
+  .tour-popover {
+    width: 100%;
+    height: 100%;
+    max-height: none;
+    overflow: auto;
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
+  .tour-popover h2 {
+    font-size: 26px;
+    overflow-wrap: anywhere;
+  }
+  .tour-actions {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+    background: rgba(255, 253, 248, .97);
+    margin: -18px -18px 12px;
+    padding: 12px 18px;
+  }
+  .tour-actions div {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    width: 100%;
+  }
+  .dots {
+    display: none;
+  }
+}
 @media print {
   body { background: #fff; }
   .topbar,
@@ -550,11 +775,12 @@ function exportJs(): string {
   let active = 0;
   let mode = "walk";
   let tourActive = false;
+  let promptVisible = false;
+  let followFocusedEvidence = false;
   const root = document.getElementById("walkthrough-root");
   let timer = window.setTimeout(function () {
-    tourActive = true;
+    promptVisible = true;
     render();
-    scrollFocusIntoView();
   }, 3000);
 
   function esc(value) {
@@ -669,7 +895,7 @@ function exportJs(): string {
     const resumeLabel = usePolished ? "Resume" : "Resume";
     const resumeName = usePolished ? ((model.polishedResume && model.polishedResume.name) || model.candidateName || rawResumeTitle()) : rawResumeTitle();
     const resumeHeadline = usePolished ? ((model.polishedResume && model.polishedResume.headline) || model.candidateHeadline || model.targetTitle || "Candidate profile") : "Original version";
-    root.className = "mode-" + mode + (tourActive ? " tour-active generated-version" : " resume-first start-version");
+    root.className = "mode-" + mode + (tourActive ? " tour-active generated-version" : " resume-first start-version") + (promptVisible ? " prompt-visible" : "");
     root.innerHTML =
       '<main class="artifact-shell">' +
         '<div class="topbar">' +
@@ -679,14 +905,13 @@ function exportJs(): string {
           '</div>' +
         '</div>' +
         '<section class="resume-stage">' +
-          '<article class="resume-document ' + (usePolished ? "generated-version " + templateClass() : "source-version") + '">' +
+          '<div class="resume-wrap"><article class="resume-document ' + (usePolished ? "generated-version " + templateClass() : "source-version") + '">' +
             '<header class="resume-head"><div><p>' + resumeLabel + '</p><h1>' + esc(resumeName) + '</h1></div><span>' + esc(resumeHeadline) + '</span></header>' +
             ((usePolished && model.polishedResume && model.polishedResume.contactLine) ? '<p class="resume-contact">' + esc(model.polishedResume.contactLine) + '</p>' : '') +
             ((usePolished && model.polishedResume && model.polishedResume.summary) ? '<p class="resume-summary">' + esc(model.polishedResume.summary) + '</p>' : '') +
             renderResume(step) +
-          '</article>' +
-          renderLaunchNote() +
-          renderPopover(step) +
+          '</article></div>' +
+          '<div class="walkthrough-wrap">' + renderLaunchNote() + renderPopover(step) + '</div>' +
         '</section>' +
         renderBriefing() +
       '</main>';
@@ -695,7 +920,8 @@ function exportJs(): string {
     return '<button type="button" data-mode="' + id + '" class="' + (mode === id ? "active" : "") + '">' + label + '</button>';
   }
   function renderLaunchNote() {
-    return '<aside class="launch-note"><strong>Guided notes start in a moment.</strong><p>The walkthrough will highlight the resume evidence most relevant to this role.</p><button class="start-button" type="button" data-start>Start now</button></aside>';
+    if (!promptVisible || tourActive || mode !== "walk") return "";
+    return '<aside class="launch-note"><strong>See why this resume fits the role</strong><p>Open the guided overlay to see source-backed resume evidence mapped directly to the target work.</p><button class="start-button" type="button" data-start>Show the fit</button></aside>';
   }
   function renderPopover(step) {
     return '<article class="tour-popover">' +
@@ -724,6 +950,7 @@ function exportJs(): string {
   }
   function startTour() {
     window.clearTimeout(timer);
+    promptVisible = false;
     tourActive = true;
     mode = "walk";
     render();
@@ -732,7 +959,30 @@ function exportJs(): string {
   function scrollFocusIntoView() {
     window.setTimeout(function () {
       const focused = document.querySelector(".resume-line.focus");
-      if (focused) focused.scrollIntoView({ block: "center", behavior: "smooth" });
+      if (!focused || !tourActive || mode !== "walk") return;
+      const mobileResumePane = window.matchMedia("(max-width: 720px)").matches ? document.querySelector(".resume-wrap") : null;
+      if (mobileResumePane) {
+        const paneRect = mobileResumePane.getBoundingClientRect();
+        const rect = focused.getBoundingClientRect();
+        const comfortablyVisible = rect.top > paneRect.top + 42 && rect.bottom < paneRect.bottom - 42;
+        if (!comfortablyVisible) {
+          mobileResumePane.scrollBy({
+            top: rect.top - paneRect.top - (paneRect.height / 2) + (rect.height / 2),
+            behavior: "smooth"
+          });
+        }
+        followFocusedEvidence = false;
+        return;
+      }
+      const rect = focused.getBoundingClientRect();
+      const comfortablyVisible = rect.top > 96 && rect.bottom < window.innerHeight - 40;
+      if (!comfortablyVisible && followFocusedEvidence) {
+        window.scrollTo({
+          top: Math.max(0, window.scrollY + rect.top - 150),
+          behavior: "smooth"
+        });
+      }
+      followFocusedEvidence = false;
     }, 50);
   }
   root.addEventListener("click", function (event) {
@@ -742,10 +992,12 @@ function exportJs(): string {
     if (target.matches("[data-print]")) window.print();
     if (target.matches("[data-next]")) {
       active = Math.min(steps.length - 1, active + 1);
+      followFocusedEvidence = true;
       startTour();
     }
     if (target.matches("[data-prev]")) {
       active = Math.max(0, active - 1);
+      followFocusedEvidence = true;
       startTour();
     }
     if (target.matches("[data-mode]")) {
@@ -755,6 +1007,7 @@ function exportJs(): string {
     }
     if (target.matches("[data-step]")) {
       active = Number(target.getAttribute("data-step"));
+      followFocusedEvidence = true;
       startTour();
     }
   });
@@ -762,11 +1015,13 @@ function exportJs(): string {
     if (!tourActive || mode !== "walk") return;
     if (event.key === "ArrowRight") {
       active = Math.min(steps.length - 1, active + 1);
+      followFocusedEvidence = true;
       render();
       scrollFocusIntoView();
     }
     if (event.key === "ArrowLeft") {
       active = Math.max(0, active - 1);
+      followFocusedEvidence = true;
       render();
       scrollFocusIntoView();
     }

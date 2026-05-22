@@ -25,7 +25,7 @@ Open the Vite URL shown in the terminal.
 
 ## LLM Generation
 
-Choose OpenAI or Claude in the app and paste the matching API key. Keys are used by local Vite proxies so the browser can generate without adding a backend project.
+Choose OpenAI or Claude in the app and paste the matching API key. Keys are sent through the local/hosted app proxy so the browser can generate without exposing provider calls directly to CORS.
 
 - OpenAI proxy: `/api/openai-responses`
 - Claude proxy: `/api/anthropic-messages`
@@ -65,13 +65,24 @@ The exported HTML includes:
 - the supplied resume/context needed for the walkthrough
 - standard resume-first opening
 - two resume versions: the starting pasted resume first, then the generated polished resume
-- automatic guided overlay reveal after 3 seconds
+- a prompt after 3 seconds that opens the guided overlay
 - highlighted text inside the generated resume, with source evidence kept separately
 - slightly dimmed non-focused resume text during the tour
+- desktop sticky walkthrough rail
+- mobile 50/50 stacked resume and walkthrough panes
 - fit brief mode
 - print CSS
 
 The exported file has no external JS, no external CSS, no CDN dependency, no backend calls, and no API calls.
+
+## Render Deployment
+
+This repo includes a Render web service blueprint. It builds the Vite app and serves it through `server.mjs`, which requires a password before serving the app or AI proxy routes.
+
+- Build command: `npm ci && npm run build`
+- Start command: `npm start`
+- Password env var: `SITE_PASSWORD`
+- Current blueprint password: `AIROCKS`
 
 ## Credibility Rules
 
