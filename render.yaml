@@ -7,5 +7,7 @@ services:
     startCommand: npm start
     healthCheckPath: /healthz
     envVars:
-      - key: SITE_PASSWORD
-        value: AIROCKS
+      - key: LOGIN_NOTIFY_TO
+        value: chris@searchles.com
+      - key: MAGIC_LINK_FROM
+        value: Resume Walkthrough Builder <noreply@resume-walkthrough-builder.local>

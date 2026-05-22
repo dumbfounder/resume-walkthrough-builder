@@ -77,12 +77,15 @@ The exported file has no external JS, no external CSS, no CDN dependency, no bac
 
 ## Render Deployment
 
-This repo includes a Render web service blueprint. It builds the Vite app and serves it through `server.mjs`, which requires a password before serving the app or AI proxy routes.
+This repo includes a Render web service blueprint. It builds the Vite app and serves it through `server.mjs`, which requires magic-link login before serving the app or AI proxy routes.
 
 - Build command: `npm ci && npm run build`
 - Start command: `npm start`
-- Password env var: `SITE_PASSWORD`
-- Current blueprint password: `AIROCKS`
+- Magic links expire after 15 minutes.
+- Successful logins send a notification email to `LOGIN_NOTIFY_TO`.
+- Email delivery uses `RESEND_API_KEY` or `SENDGRID_API_KEY`.
+- Set `MAGIC_LINK_FROM` to a verified sender for the selected email provider.
+- Set `PUBLIC_APP_URL` to the deployed Render URL so links point to the live app.
 
 ## Credibility Rules
 
