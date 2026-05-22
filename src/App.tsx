@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type SetStateAction } from "react";
 import { generateOverlayWalkthrough, polishStandaloneHtml, reviseOverlayStep } from "./ai/openaiClient";
 import { buildOverlayHtml } from "./export/overlayHtmlExporter";
+import { applyDesignIntentFallback } from "./export/designIntentFallback";
 import type { ExportDesign, OverlayDetailBlock, OverlayStep, OverlayWalkthroughModel, PolishedResume, StudioInputs, StudioState } from "./types/overlay";
 import { isStandaloneHtmlUsable } from "./utils/htmlValidation";
 
@@ -179,6 +180,7 @@ export default function App() {
           html,
           instruction: initialDesignInstruction
         });
+        html = applyDesignIntentFallback(html, state.inputs.resumeStyleDirection).html;
         outputHtml = html;
       }
       if (currentOutputPrompt(state)) {
@@ -189,6 +191,7 @@ export default function App() {
           html,
           instruction: currentOutputPrompt(state)
         });
+        html = applyDesignIntentFallback(html, currentOutputPrompt(state)).html;
         outputHtml = html;
       }
       setState((current) => ({
@@ -359,13 +362,16 @@ export default function App() {
         html: sourceHtml,
         instruction: state.outputPrompt
       });
+      const fallback = applyDesignIntentFallback(outputHtml, state.outputPrompt);
       setState((current) => ({
         ...current,
-        outputHtml,
+        outputHtml: fallback.html,
         outputWalkthrough: null,
         selectedMode: "output",
         isPolishingOutput: false,
-        status: "Output prompt applied directly to the standalone HTML. Preview and export now use the edited HTML file."
+        status: fallback.applied
+          ? "Output prompt applied, and readability style intent was enforced on the standalone HTML."
+          : "Output prompt applied directly to the standalone HTML. Preview and export now use the edited HTML file."
       }));
     } catch (error) {
       setState((current) => ({
