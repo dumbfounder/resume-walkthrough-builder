@@ -65,6 +65,7 @@ const emptyState: StudioState = {
 export default function App() {
   const [state, setState] = useState<StudioState>(() => loadState());
   const [revisionPrompt, setRevisionPrompt] = useState("");
+  const [backupStatus, setBackupStatus] = useState("");
   const projectSessionId = useRef(readProjectSessionId());
 
   useEffect(() => {
@@ -97,7 +98,10 @@ export default function App() {
     if (!hasMeaningfulDraft(state)) return;
     const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      saveServerWorkSession(projectSessionId.current, state, controller.signal);
+      saveServerWorkSession(projectSessionId.current, state, controller.signal).then((result) => {
+        if (!result) return;
+        setBackupStatus(result.ok ? `Session backed up ${new Date(result.savedAt).toLocaleTimeString()}` : result.error);
+      });
     }, 1400);
     return () => {
       window.clearTimeout(timer);
@@ -320,6 +324,7 @@ export default function App() {
         <section className="left-panel">
           <div className="status-line">
             <span>{state.status}</span>
+            {backupStatus && <small>{backupStatus}</small>}
             {state.error && <strong>{state.error}</strong>}
           </div>
 
@@ -1028,7 +1033,7 @@ function hasMeaningfulDraft(state: StudioState): boolean {
   );
 }
 
-async function saveServerWorkSession(projectId: string, state: StudioState, signal: AbortSignal) {
+async function saveServerWorkSession(projectId: string, state: StudioState, signal: AbortSignal): Promise<{ ok: true; savedAt: string } | { ok: false; error: string } | null> {
   try {
     const {
       openaiApiKey: _openaiApiKey,
@@ -1055,11 +1060,18 @@ async function saveServerWorkSession(projectId: string, state: StudioState, sign
       }),
       signal
     });
-    if (!response.ok && response.status !== 401 && response.status !== 404) {
-      console.warn(`Work session backup failed: ${response.status}`);
+    if (response.ok) {
+      const data = (await response.json()) as { savedAt?: string };
+      return { ok: true, savedAt: data.savedAt || new Date().toISOString() };
     }
+    if (response.status === 401 || response.status === 404) {
+      return null;
+    }
+    const data = (await response.json().catch(() => null)) as { error?: string } | null;
+    return { ok: false, error: data?.error || `Session backup failed: ${response.status}` };
   } catch (error) {
-    if (error instanceof DOMException && error.name === "AbortError") return;
+    if (error instanceof DOMException && error.name === "AbortError") return null;
+    return { ok: false, error: "Session backup failed." };
   }
 }
 

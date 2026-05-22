@@ -180,6 +180,11 @@ label {
   font-weight: 750;
 }
 
+.status-line small {
+  color: var(--accent);
+  font-weight: 750;
+}
+
 .compose-stack,
 .edit-stack,
 .step-editor,
