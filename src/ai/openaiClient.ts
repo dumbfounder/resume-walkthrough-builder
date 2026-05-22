@@ -7,6 +7,7 @@ import type {
   OverlayDetailBlock,
   OverlayStep,
   OverlayWalkthroughModel,
+  ExportDesign,
   PolishedResume,
   PolishedResumeSection
 } from "../types/overlay";
@@ -264,6 +265,7 @@ function normalizeWalkthrough(value: unknown, inputs?: LlmGenerateRequest["input
     candidateName: stringField(source.candidateName) || fallbackResume.name,
     candidateHeadline: stringField(source.candidateHeadline) || fallbackResume.headline,
     polishedResume,
+    exportDesign: normalizeExportDesign(source.exportDesign),
     targetTitle: stringField(source.targetTitle),
     targetOrganization: stringField(source.targetOrganization),
     reviewerIntro: stringField(source.reviewerIntro),
@@ -273,6 +275,29 @@ function normalizeWalkthrough(value: unknown, inputs?: LlmGenerateRequest["input
     gaps: arrayOfStrings(source.gaps),
     steps: normalizedSteps,
     closingNote: stringField(source.closingNote)
+  };
+}
+
+function normalizeExportDesign(value: unknown): ExportDesign {
+  const source = isRecord(value) ? value : {};
+  return {
+    paletteName: stringField(source.paletteName) || "Executive neutral",
+    background: hexField(source.background, "#e9e4dc"),
+    paper: hexField(source.paper, "#fffdf8"),
+    text: hexField(source.text, "#1f252c"),
+    muted: hexField(source.muted, "#69727c"),
+    accent: hexField(source.accent, "#245f65"),
+    accentSoft: hexField(source.accentSoft, "#e3f0ee"),
+    border: hexField(source.border, "#ded6ca"),
+    highlight: hexField(source.highlight, "#f7e6a2"),
+    warning: hexField(source.warning, "#9a6a1f"),
+    risk: hexField(source.risk, "#9f4038"),
+    resumeStripe: stringField(source.resumeStripe) || "linear-gradient(#245f65, #b8892f)",
+    popoverWidth: enumField(source.popoverWidth, ["compact", "balanced", "wide"], "balanced"),
+    resumeDensity: enumField(source.resumeDensity, ["airy", "balanced", "dense"], "balanced"),
+    cornerStyle: enumField(source.cornerStyle, ["soft", "crisp"], "soft"),
+    typeScale: enumField(source.typeScale, ["compact", "balanced", "large"], "balanced"),
+    visualNotes: stringField(source.visualNotes)
   };
 }
 
@@ -472,6 +497,16 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function stringField(value: unknown): string {
   return typeof value === "string" ? value : "";
+}
+
+function hexField(value: unknown, fallback: string): string {
+  const text = stringField(value).trim();
+  return /^#[0-9A-Fa-f]{6}$/.test(text) ? text : fallback;
+}
+
+function enumField<T extends string>(value: unknown, options: readonly T[], fallback: T): T {
+  const text = stringField(value);
+  return options.includes(text as T) ? (text as T) : fallback;
 }
 
 function arrayOfStrings(value: unknown): string[] {

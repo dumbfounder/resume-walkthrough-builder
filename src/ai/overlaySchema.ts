@@ -76,6 +76,49 @@ export const polishedResumeSchema = {
   required: ["name", "headline", "contactLine", "summary", "sections"]
 } as const;
 
+export const exportDesignSchema = {
+  type: "object",
+  additionalProperties: false,
+  properties: {
+    paletteName: { type: "string" },
+    background: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" },
+    paper: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" },
+    text: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" },
+    muted: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" },
+    accent: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" },
+    accentSoft: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" },
+    border: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" },
+    highlight: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" },
+    warning: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" },
+    risk: { type: "string", pattern: "^#[0-9A-Fa-f]{6}$" },
+    resumeStripe: { type: "string" },
+    popoverWidth: { type: "string", enum: ["compact", "balanced", "wide"] },
+    resumeDensity: { type: "string", enum: ["airy", "balanced", "dense"] },
+    cornerStyle: { type: "string", enum: ["soft", "crisp"] },
+    typeScale: { type: "string", enum: ["compact", "balanced", "large"] },
+    visualNotes: { type: "string" }
+  },
+  required: [
+    "paletteName",
+    "background",
+    "paper",
+    "text",
+    "muted",
+    "accent",
+    "accentSoft",
+    "border",
+    "highlight",
+    "warning",
+    "risk",
+    "resumeStripe",
+    "popoverWidth",
+    "resumeDensity",
+    "cornerStyle",
+    "typeScale",
+    "visualNotes"
+  ]
+} as const;
+
 export const overlayWalkthroughSchema = {
   type: "object",
   additionalProperties: false,
@@ -83,6 +126,7 @@ export const overlayWalkthroughSchema = {
     candidateName: { type: "string" },
     candidateHeadline: { type: "string" },
     polishedResume: polishedResumeSchema,
+    exportDesign: exportDesignSchema,
     targetTitle: { type: "string" },
     targetOrganization: { type: "string" },
     reviewerIntro: { type: "string" },
@@ -108,6 +152,7 @@ export const overlayWalkthroughSchema = {
     "candidateName",
     "candidateHeadline",
     "polishedResume",
+    "exportDesign",
     "targetTitle",
     "targetOrganization",
     "reviewerIntro",

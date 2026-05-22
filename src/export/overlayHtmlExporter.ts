@@ -40,6 +40,14 @@ function exportCss(): string {
   --gold: #f7e6a2;
   --warning: #9a6a1f;
   --risk: #9f4038;
+  --stripe: linear-gradient(#245f65, #b8892f);
+  --popover-width: 410px;
+  --resume-padding: clamp(38px, 6vw, 68px);
+  --resume-line-size: 14.7px;
+  --resume-line-gap: 7px;
+  --resume-radius: 0px;
+  --panel-radius: 20px;
+  --headline-size: clamp(34px, 5vw, 54px);
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
@@ -57,6 +65,9 @@ button { font: inherit; }
 .artifact-shell {
   min-height: 100vh;
   padding: clamp(18px, 3vw, 42px);
+  background:
+    radial-gradient(circle at 12% 8%, color-mix(in srgb, var(--accent) 14%, transparent), transparent 32%),
+    linear-gradient(135deg, color-mix(in srgb, var(--paper) 54%, var(--bg)), var(--bg));
 }
 .topbar {
   position: fixed;
@@ -122,7 +133,8 @@ button { font: inherit; }
   background: var(--paper);
   border: 1px solid rgba(31, 37, 44, .12);
   box-shadow: 0 30px 100px rgba(31, 37, 44, .18);
-  padding: clamp(38px, 6vw, 68px);
+  border-radius: var(--resume-radius);
+  padding: var(--resume-padding);
   transition: transform .5s ease, filter .5s ease;
 }
 .resume-document::before {
@@ -130,7 +142,7 @@ button { font: inherit; }
   position: absolute;
   inset: 0 auto 0 0;
   width: 9px;
-  background: linear-gradient(#245f65, #b8892f);
+  background: var(--stripe);
 }
 .resume-document.source-version::before {
   background: linear-gradient(#8a8176, #c9c0b2);
@@ -199,7 +211,7 @@ button { font: inherit; }
 }
 .resume-head h1 {
   margin: 0;
-  font-size: clamp(34px, 5vw, 54px);
+  font-size: var(--headline-size);
   line-height: 1.02;
 }
 .resume-head span {
@@ -230,9 +242,9 @@ button { font: inherit; }
   text-transform: uppercase;
 }
 .resume-line {
-  margin: 0 0 7px;
+  margin: 0 0 var(--resume-line-gap);
   color: #29323b;
-  font-size: 14.7px;
+  font-size: var(--resume-line-size);
   line-height: 1.5;
   transition: opacity .28s ease, filter .28s ease, transform .28s ease;
 }
@@ -286,12 +298,12 @@ button { font: inherit; }
   top: 50%;
   right: clamp(18px, 5vw, 72px);
   z-index: 12;
-  width: min(410px, calc(100% - 36px));
+  width: min(var(--popover-width), calc(100% - 36px));
   transform: translateY(-50%) translateX(18px);
   opacity: 0;
   pointer-events: none;
   border: 1px solid rgba(36, 95, 101, .28);
-  border-radius: 20px;
+  border-radius: var(--panel-radius);
   background: rgba(255, 253, 248, .97);
   box-shadow: 0 28px 100px rgba(31, 37, 44, .25);
   padding: 18px;
@@ -772,6 +784,7 @@ function exportJs(): string {
   const data = JSON.parse(document.getElementById("walkthrough-data").textContent);
   const model = data.model || {};
   const steps = model.steps || [];
+  const design = normalizeDesign(model.exportDesign || {});
   let active = 0;
   let mode = "walk";
   let tourActive = false;
@@ -896,6 +909,7 @@ function exportJs(): string {
     const resumeName = usePolished ? ((model.polishedResume && model.polishedResume.name) || model.candidateName || rawResumeTitle()) : rawResumeTitle();
     const resumeHeadline = usePolished ? ((model.polishedResume && model.polishedResume.headline) || model.candidateHeadline || model.targetTitle || "Candidate profile") : "Original version";
     root.className = "mode-" + mode + (tourActive ? " tour-active generated-version" : " resume-first start-version") + (promptVisible ? " prompt-visible" : "");
+    root.setAttribute("style", designStyle(design));
     root.innerHTML =
       '<main class="artifact-shell">' +
         '<div class="topbar">' +
@@ -915,6 +929,70 @@ function exportJs(): string {
         '</section>' +
         renderBriefing() +
       '</main>';
+  }
+  function normalizeDesign(input) {
+    const widths = { compact: "370px", balanced: "410px", wide: "min(520px, 34vw)" };
+    const densities = {
+      airy: { padding: "clamp(48px, 7vw, 82px)", lineSize: "15.2px", lineGap: "10px" },
+      balanced: { padding: "clamp(38px, 6vw, 68px)", lineSize: "14.7px", lineGap: "7px" },
+      dense: { padding: "clamp(30px, 5vw, 54px)", lineSize: "13.8px", lineGap: "4px" }
+    };
+    const headlineSizes = {
+      compact: "clamp(30px, 4.4vw, 46px)",
+      balanced: "clamp(34px, 5vw, 54px)",
+      large: "clamp(40px, 5.6vw, 64px)"
+    };
+    const density = densities[input.resumeDensity] || densities.balanced;
+    return {
+      bg: hex(input.background, "#e9e4dc"),
+      paper: hex(input.paper, "#fffdf8"),
+      text: hex(input.text, "#1f252c"),
+      muted: hex(input.muted, "#69727c"),
+      accent: hex(input.accent, "#245f65"),
+      accentSoft: hex(input.accentSoft, "#e3f0ee"),
+      border: hex(input.border, "#ded6ca"),
+      gold: hex(input.highlight, "#f7e6a2"),
+      warning: hex(input.warning, "#9a6a1f"),
+      risk: hex(input.risk, "#9f4038"),
+      stripe: cssGradient(input.resumeStripe) || "linear-gradient(#245f65, #b8892f)",
+      popoverWidth: widths[input.popoverWidth] || widths.balanced,
+      resumePadding: density.padding,
+      resumeLineSize: density.lineSize,
+      resumeLineGap: density.lineGap,
+      resumeRadius: input.cornerStyle === "crisp" ? "2px" : "10px",
+      panelRadius: input.cornerStyle === "crisp" ? "10px" : "20px",
+      headlineSize: headlineSizes[input.typeScale] || headlineSizes.balanced
+    };
+  }
+  function designStyle(d) {
+    return [
+      ["--bg", d.bg],
+      ["--paper", d.paper],
+      ["--text", d.text],
+      ["--muted", d.muted],
+      ["--accent", d.accent],
+      ["--accent-soft", d.accentSoft],
+      ["--border", d.border],
+      ["--gold", d.gold],
+      ["--warning", d.warning],
+      ["--risk", d.risk],
+      ["--stripe", d.stripe],
+      ["--popover-width", d.popoverWidth],
+      ["--resume-padding", d.resumePadding],
+      ["--resume-line-size", d.resumeLineSize],
+      ["--resume-line-gap", d.resumeLineGap],
+      ["--resume-radius", d.resumeRadius],
+      ["--panel-radius", d.panelRadius],
+      ["--headline-size", d.headlineSize]
+    ].map(([key, value]) => key + ":" + value).join(";");
+  }
+  function hex(value, fallback) {
+    return /^#[0-9A-Fa-f]{6}$/.test(String(value || "")) ? value : fallback;
+  }
+  function cssGradient(value) {
+    const text = String(value || "");
+    if (!/^linear-gradient\\((#[0-9A-Fa-f]{6}|[\\s,.%degto-])+\\)$/.test(text)) return "";
+    return text;
   }
   function button(id, label) {
     return '<button type="button" data-mode="' + id + '" class="' + (mode === id ? "active" : "") + '">' + label + '</button>';

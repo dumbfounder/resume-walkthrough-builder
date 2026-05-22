@@ -43,6 +43,7 @@ Choose OpenAI or Claude in the app and paste the matching API key. Keys are sent
 - Walkthrough technique prompt controls how the overlay makes the hiring case, such as guided annotation, board memo, objection handling, founder pitch, recruiter skim, or technical deep dive.
 - Continuity prompt gives the LLM a throughline to maintain across steps.
 - Output-only prompt creates a separate final artifact variant for preview/export. It is saved and reapplied automatically on future full regeneration runs.
+- Output polishing can now change the final artifact's design layer: color palette, highlight color, resume density, type scale, popover width, corner style, and accent stripe.
 
 ## Workflow
 

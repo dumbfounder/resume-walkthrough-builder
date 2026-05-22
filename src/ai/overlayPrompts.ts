@@ -40,6 +40,10 @@ Rules:
 - Each step's detailBlocks should be generated from the requested technique. Use specific, human labels such as "The useful signal", "What this lets them trust", or "Where to be careful" when appropriate; do not repeat the same labels on every step.
 - Use caveat detailBlocks only when the source material actually calls for caveat language.
 - The final result should feel like a product-tour overlay directly on top of a beautiful resume, not a dense report or dashboard.
+- Use exportDesign to control the final standalone HTML look and feel. If the user asks for colors, mood, premium feel, visual design, spacing, typography, panel size, density, or polish, reflect that in exportDesign, not only in wording.
+- exportDesign colors must be complete 6-digit hex colors. Choose restrained professional palettes; avoid default teal/gold unless the user asks for it.
+- exportDesign.resumeStripe may be a CSS linear-gradient using only the chosen hex colors.
+- In output-polish passes, changing visual direction should materially change exportDesign.
 - Prefer fewer, better steps over a long list.
 - Include caveats where the source evidence is thin.
 - Never mention that you are an AI model.`;
@@ -91,7 +95,7 @@ export function buildStepRevisionInput(inputs: StudioInputs, currentModel: unkno
 export function buildOutputPolishInput(inputs: StudioInputs, currentModel: unknown, instruction: string): string {
   return JSON.stringify(
     {
-      task: "Revise the final exported resume walkthrough model only. This is an output-polish pass, not source parsing and not a new product explanation.",
+      task: "Revise the final exported resume walkthrough model only. This is an output-polish pass, not source parsing and not a new product explanation. If the instruction asks about visual design, colors, layout feel, premium polish, density, typography, or panel size, materially change exportDesign.",
       rules: [
         "Keep the same factual evidence boundaries.",
         "Do not invent employers, dates, degrees, projects, metrics, technologies, titles, funding, or outcomes.",

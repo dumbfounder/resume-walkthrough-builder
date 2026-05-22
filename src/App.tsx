@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type SetStateAction } from "react";
 import { generateOverlayWalkthrough, polishOverlayOutput, reviseOverlayStep } from "./ai/openaiClient";
 import { buildOverlayHtml } from "./export/overlayHtmlExporter";
-import type { OverlayDetailBlock, OverlayStep, OverlayWalkthroughModel, PolishedResume, StudioInputs, StudioState } from "./types/overlay";
+import type { ExportDesign, OverlayDetailBlock, OverlayStep, OverlayWalkthroughModel, PolishedResume, StudioInputs, StudioState } from "./types/overlay";
 
 const STORAGE_KEY = "resume-overlay-studio:v3";
 const KEY_STORAGE_KEY = "resume-overlay-studio:provider-keys:v2";
 const PROJECT_SESSION_KEY = "resume-overlay-studio:project-session-id:v1";
-const DRAFT_SCHEMA_VERSION = 8;
+const DRAFT_SCHEMA_VERSION = 9;
 
 const resumeTemplateOptions: { value: StudioInputs["resumeTemplate"]; label: string; note: string }[] = [
   { value: "executiveBriefing", label: "Executive Briefing", note: "Crisp, premium, CEO-readable" },
@@ -782,6 +782,14 @@ function EditPanel({
           <textarea value={walkthrough.reviewerIntro} onChange={(event) => onWalkthroughChange({ reviewerIntro: event.target.value })} rows={3} />
         </label>
         <label>
+          Export visual design
+          <textarea
+            value={serializeExportDesign(walkthrough.exportDesign ?? defaultExportDesign())}
+            onChange={(event) => onWalkthroughChange({ exportDesign: parseExportDesign(event.target.value, walkthrough.exportDesign ?? defaultExportDesign()) })}
+            rows={8}
+          />
+        </label>
+        <label>
           Polished resume used in export
           <textarea
             value={serializePolishedResume(walkthrough)}
@@ -961,9 +969,10 @@ function OverlayPreview({
       </div>
     );
   }
+  const design = model.exportDesign ?? defaultExportDesign();
 
   return (
-    <div className="artifact-frame">
+    <div className="artifact-frame" style={previewDesignStyle(design)}>
       <div className="artifact-toolbar">
         <span>Candidate fit preview</span>
         <strong>{model.targetTitle || "Target role"}</strong>
@@ -1086,6 +1095,29 @@ function ResumeDocument({ model, inputs, selectedStep }: { model: OverlayWalkthr
       ))}
     </article>
   );
+}
+
+function previewDesignStyle(design: ExportDesign): CSSProperties {
+  return {
+    "--bg": design.background,
+    "--paper": design.paper,
+    "--text": design.text,
+    "--muted": design.muted,
+    "--accent": design.accent,
+    "--accent-soft": design.accentSoft,
+    "--border": design.border,
+    "--gold": design.highlight,
+    "--warning": design.warning,
+    "--risk": design.risk,
+    "--stripe": design.resumeStripe,
+    "--popover-width": design.popoverWidth === "wide" ? "min(520px, 34vw)" : design.popoverWidth === "compact" ? "370px" : "410px",
+    "--resume-padding": design.resumeDensity === "airy" ? "clamp(42px, 6vw, 72px)" : design.resumeDensity === "dense" ? "clamp(28px, 4vw, 48px)" : "clamp(34px, 5vw, 58px)",
+    "--resume-line-size": design.resumeDensity === "dense" ? "13.8px" : design.resumeDensity === "airy" ? "15.2px" : "14.5px",
+    "--resume-line-gap": design.resumeDensity === "dense" ? "4px" : design.resumeDensity === "airy" ? "10px" : "7px",
+    "--resume-radius": design.cornerStyle === "crisp" ? "2px" : "10px",
+    "--panel-radius": design.cornerStyle === "crisp" ? "10px" : "20px",
+    "--headline-size": design.typeScale === "large" ? "clamp(36px, 4.5vw, 52px)" : design.typeScale === "compact" ? "clamp(28px, 3.6vw, 38px)" : "clamp(31px, 4vw, 44px)"
+  } as CSSProperties;
 }
 
 function loadState(): StudioState {
@@ -1232,6 +1264,7 @@ function migrateWalkthrough(walkthrough: OverlayWalkthroughModel): OverlayWalkth
   };
   return {
     ...migrated,
+    exportDesign: migrated.exportDesign ?? defaultExportDesign(),
     steps: migrated.steps.map((step) => ({
       ...step,
       detailBlocks: displayDetailBlocks(step)
@@ -1250,6 +1283,7 @@ function createManualWalkthrough(step: OverlayStep): OverlayWalkthroughModel {
       summary: "",
       sections: []
     },
+    exportDesign: defaultExportDesign(),
     targetTitle: "",
     targetOrganization: "",
     reviewerIntro: "",
@@ -1259,6 +1293,28 @@ function createManualWalkthrough(step: OverlayStep): OverlayWalkthroughModel {
     gaps: [],
     steps: [step],
     closingNote: ""
+  };
+}
+
+function defaultExportDesign(): ExportDesign {
+  return {
+    paletteName: "Executive neutral",
+    background: "#e9e4dc",
+    paper: "#fffdf8",
+    text: "#1f252c",
+    muted: "#69727c",
+    accent: "#245f65",
+    accentSoft: "#e3f0ee",
+    border: "#ded6ca",
+    highlight: "#f7e6a2",
+    warning: "#9a6a1f",
+    risk: "#9f4038",
+    resumeStripe: "linear-gradient(#245f65, #b8892f)",
+    popoverWidth: "balanced",
+    resumeDensity: "balanced",
+    cornerStyle: "soft",
+    typeScale: "balanced",
+    visualNotes: ""
   };
 }
 
@@ -1347,6 +1403,67 @@ function parsePolishedResumeText(text: string, walkthrough: OverlayWalkthroughMo
     summary,
     sections
   };
+}
+
+function serializeExportDesign(design: ExportDesign): string {
+  return [
+    `paletteName: ${design.paletteName}`,
+    `background: ${design.background}`,
+    `paper: ${design.paper}`,
+    `text: ${design.text}`,
+    `muted: ${design.muted}`,
+    `accent: ${design.accent}`,
+    `accentSoft: ${design.accentSoft}`,
+    `border: ${design.border}`,
+    `highlight: ${design.highlight}`,
+    `warning: ${design.warning}`,
+    `risk: ${design.risk}`,
+    `resumeStripe: ${design.resumeStripe}`,
+    `popoverWidth: ${design.popoverWidth}`,
+    `resumeDensity: ${design.resumeDensity}`,
+    `cornerStyle: ${design.cornerStyle}`,
+    `typeScale: ${design.typeScale}`,
+    `visualNotes: ${design.visualNotes}`
+  ].join("\n");
+}
+
+function parseExportDesign(text: string, fallback: ExportDesign): ExportDesign {
+  const values = new Map(
+    text
+      .replace(/\r/g, "")
+      .split("\n")
+      .map((line) => line.match(/^([A-Za-z]+):\s*(.*)$/))
+      .filter((match): match is RegExpMatchArray => Boolean(match))
+      .map((match) => [match[1], match[2]])
+  );
+  return {
+    paletteName: values.get("paletteName") || fallback.paletteName,
+    background: parseHex(values.get("background"), fallback.background),
+    paper: parseHex(values.get("paper"), fallback.paper),
+    text: parseHex(values.get("text"), fallback.text),
+    muted: parseHex(values.get("muted"), fallback.muted),
+    accent: parseHex(values.get("accent"), fallback.accent),
+    accentSoft: parseHex(values.get("accentSoft"), fallback.accentSoft),
+    border: parseHex(values.get("border"), fallback.border),
+    highlight: parseHex(values.get("highlight"), fallback.highlight),
+    warning: parseHex(values.get("warning"), fallback.warning),
+    risk: parseHex(values.get("risk"), fallback.risk),
+    resumeStripe: values.get("resumeStripe") || fallback.resumeStripe,
+    popoverWidth: parseChoice(values.get("popoverWidth"), ["compact", "balanced", "wide"], fallback.popoverWidth),
+    resumeDensity: parseChoice(values.get("resumeDensity"), ["airy", "balanced", "dense"], fallback.resumeDensity),
+    cornerStyle: parseChoice(values.get("cornerStyle"), ["soft", "crisp"], fallback.cornerStyle),
+    typeScale: parseChoice(values.get("typeScale"), ["compact", "balanced", "large"], fallback.typeScale),
+    visualNotes: values.get("visualNotes") || fallback.visualNotes
+  };
+}
+
+function parseHex(value: string | undefined, fallback: string): string {
+  return value && /^#[0-9A-Fa-f]{6}$/.test(value.trim()) ? value.trim() : fallback;
+}
+
+function parseChoice<T extends string>(value: string | undefined, options: readonly T[], fallback: T): T {
+  const trimmed = value?.trim() as T | undefined;
+  return trimmed && options.includes(trimmed) ? trimmed : fallback;
 }
 
 interface ResumeSection {

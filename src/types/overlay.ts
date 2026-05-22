@@ -45,10 +45,31 @@ export interface OverlayStep {
   resumeAnchor: string;
 }
 
+export interface ExportDesign {
+  paletteName: string;
+  background: string;
+  paper: string;
+  text: string;
+  muted: string;
+  accent: string;
+  accentSoft: string;
+  border: string;
+  highlight: string;
+  warning: string;
+  risk: string;
+  resumeStripe: string;
+  popoverWidth: "compact" | "balanced" | "wide";
+  resumeDensity: "airy" | "balanced" | "dense";
+  cornerStyle: "soft" | "crisp";
+  typeScale: "compact" | "balanced" | "large";
+  visualNotes: string;
+}
+
 export interface OverlayWalkthroughModel {
   candidateName: string;
   candidateHeadline: string;
   polishedResume: PolishedResume;
+  exportDesign: ExportDesign;
   targetTitle: string;
   targetOrganization: string;
   reviewerIntro: string;
