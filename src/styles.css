@@ -189,6 +189,7 @@ label {
 .edit-stack,
 .step-editor,
 .preview-notes,
+.output-polish,
 .empty-edit {
   display: grid;
   gap: 14px;
@@ -289,7 +290,8 @@ label {
 }
 
 .empty-edit,
-.preview-notes {
+.preview-notes,
+.output-polish {
   border: 1px dashed var(--border);
   border-radius: 18px;
   background: rgba(255,253,248,.5);
@@ -297,8 +299,35 @@ label {
 }
 
 .empty-edit h2,
-.preview-notes h2 {
+.preview-notes h2,
+.output-polish h2 {
   margin: 0;
+}
+
+.output-polish p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.output-state {
+  display: grid;
+  gap: 4px;
+  border: 1px solid rgba(36, 95, 101, .2);
+  border-radius: 14px;
+  background: rgba(224, 238, 236, .4);
+  padding: 12px;
+}
+
+.output-state strong,
+.output-badge {
+  color: var(--accent);
+  font-weight: 850;
+}
+
+.output-state span {
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .preview-stage {

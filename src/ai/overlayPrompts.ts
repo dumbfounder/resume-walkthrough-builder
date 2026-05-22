@@ -88,6 +88,30 @@ export function buildStepRevisionInput(inputs: StudioInputs, currentModel: unkno
   );
 }
 
+export function buildOutputPolishInput(inputs: StudioInputs, currentModel: unknown, instruction: string): string {
+  return JSON.stringify(
+    {
+      task: "Revise the final exported resume walkthrough model only. This is an output-polish pass, not source parsing and not a new product explanation.",
+      rules: [
+        "Keep the same factual evidence boundaries.",
+        "Do not invent employers, dates, degrees, projects, metrics, technologies, titles, funding, or outcomes.",
+        "Keep evidenceQuote grounded in supplied source text or mark it Needs source evidence.",
+        "Keep resumeAnchor as exact text from the revised polishedResume.",
+        "Write for the recipient deciding whether this candidate fits the role.",
+        "Do not mention the builder app, prompts, schemas, or generation process.",
+        "Apply the user's output instruction to wording, pacing, section order, tone, emphasis, overlay structure, and final artifact feel."
+      ],
+      resumeText: inputs.resumeText,
+      freeformBackgroundText: inputs.aboutText,
+      targetRoleOrPlatformDescription: inputs.targetText,
+      outputInstruction: instruction,
+      currentWalkthroughModel: currentModel
+    },
+    null,
+    2
+  );
+}
+
 const defaultResumeDesignPrompt =
   "Completely redesign the raw pasted source into a beautiful, sendable resume. Use clean hierarchy, professional section order, edited wording, concise bullets, and a polished executive-technical visual rhythm. Do not preserve messy pasted formatting.";
 

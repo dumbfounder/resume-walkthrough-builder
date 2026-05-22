@@ -69,12 +69,15 @@ export interface StudioState {
   saveKey: boolean;
   inputs: StudioInputs;
   walkthrough: OverlayWalkthroughModel | null;
+  outputPrompt: string;
+  outputWalkthrough: OverlayWalkthroughModel | null;
   selectedStepId: string | null;
-  selectedMode: "compose" | "edit" | "preview";
+  selectedMode: "compose" | "edit" | "output" | "preview";
   status: string;
   error: string;
   isGenerating: boolean;
   isRevising: boolean;
+  isPolishingOutput: boolean;
 }
 
 export interface LlmGenerateRequest {
@@ -91,5 +94,14 @@ export interface LlmReviseStepRequest {
   inputs: StudioInputs;
   walkthrough: OverlayWalkthroughModel;
   step: OverlayStep;
+  instruction: string;
+}
+
+export interface LlmPolishOutputRequest {
+  provider: StudioState["provider"];
+  apiKey: string;
+  model: string;
+  inputs: StudioInputs;
+  walkthrough: OverlayWalkthroughModel;
   instruction: string;
 }

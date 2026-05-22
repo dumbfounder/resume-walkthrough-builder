@@ -1,7 +1,8 @@
-import { buildStepRevisionInput, buildWalkthroughInput, overlaySystemPrompt } from "./overlayPrompts";
+import { buildOutputPolishInput, buildStepRevisionInput, buildWalkthroughInput, overlaySystemPrompt } from "./overlayPrompts";
 import { overlayStepSchema, overlayWalkthroughSchema } from "./overlaySchema";
 import type {
   LlmGenerateRequest,
+  LlmPolishOutputRequest,
   LlmReviseStepRequest,
   OverlayDetailBlock,
   OverlayStep,
@@ -21,6 +22,11 @@ export async function generateOverlayWalkthrough(request: LlmGenerateRequest): P
 export async function reviseOverlayStep(request: LlmReviseStepRequest): Promise<OverlayStep> {
   const raw = request.provider === "anthropic" ? await callClaudeStep(request) : await callOpenAiStep(request);
   return normalizeStep(raw);
+}
+
+export async function polishOverlayOutput(request: LlmPolishOutputRequest): Promise<OverlayWalkthroughModel> {
+  const raw = request.provider === "anthropic" ? await callClaudeOutputPolish(request) : await callOpenAiOutputPolish(request);
+  return normalizeWalkthrough(raw, request.inputs);
 }
 
 async function callOpenAiWalkthrough(request: LlmGenerateRequest): Promise<unknown> {
@@ -64,6 +70,31 @@ Return only the revised step. Keep the same id unless the user explicitly asks f
           name: "resume_overlay_step",
           strict: true,
           schema: overlayStepSchema
+        }
+      }
+    }
+  });
+  return extractOpenAiJson(json);
+}
+
+async function callOpenAiOutputPolish(request: LlmPolishOutputRequest): Promise<unknown> {
+  const json = await callJsonEndpoint({
+    url: responsesEndpoint,
+    apiKey: request.apiKey,
+    providerName: "OpenAI",
+    body: {
+      model: request.model,
+      instructions: `${overlaySystemPrompt}
+
+This is a final-output polish pass. Return a complete revised walkthrough model. Preserve source-grounded credibility and only change the final artifact.`,
+      input: buildOutputPolishInput(request.inputs, request.walkthrough, request.instruction),
+      store: false,
+      text: {
+        format: {
+          type: "json_schema",
+          name: "resume_overlay_walkthrough",
+          strict: true,
+          schema: overlayWalkthroughSchema
         }
       }
     }
@@ -117,6 +148,31 @@ Return only the revised step. Keep the same id unless the user explicitly asks f
     }
   });
   return extractClaudeToolInput(json, "return_resume_overlay_step");
+}
+
+async function callClaudeOutputPolish(request: LlmPolishOutputRequest): Promise<unknown> {
+  const json = await callJsonEndpoint({
+    url: anthropicEndpoint,
+    apiKey: request.apiKey,
+    providerName: "Claude",
+    body: {
+      model: request.model,
+      max_tokens: 8000,
+      system: `${overlaySystemPrompt}
+
+This is a final-output polish pass. Return a complete revised walkthrough model. Preserve source-grounded credibility and only change the final artifact.`,
+      messages: [{ role: "user", content: buildOutputPolishInput(request.inputs, request.walkthrough, request.instruction) }],
+      tools: [
+        {
+          name: "return_resume_overlay_walkthrough",
+          description: "Return the polished final resume walkthrough model.",
+          input_schema: overlayWalkthroughSchema
+        }
+      ],
+      tool_choice: { type: "tool", name: "return_resume_overlay_walkthrough" }
+    }
+  });
+  return extractClaudeToolInput(json, "return_resume_overlay_walkthrough");
 }
 
 async function callJsonEndpoint({ url, apiKey, body, providerName }: { url: string; apiKey: string; body: unknown; providerName: string }) {

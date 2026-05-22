@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
-import { generateOverlayWalkthrough, reviseOverlayStep } from "./ai/openaiClient";
+import { generateOverlayWalkthrough, polishOverlayOutput, reviseOverlayStep } from "./ai/openaiClient";
 import { buildOverlayHtml } from "./export/overlayHtmlExporter";
 import type { OverlayDetailBlock, OverlayStep, OverlayWalkthroughModel, PolishedResume, StudioInputs, StudioState } from "./types/overlay";
 
 const STORAGE_KEY = "resume-overlay-studio:v3";
 const KEY_STORAGE_KEY = "resume-overlay-studio:provider-keys:v2";
 const PROJECT_SESSION_KEY = "resume-overlay-studio:project-session-id:v1";
-const DRAFT_SCHEMA_VERSION = 7;
+const DRAFT_SCHEMA_VERSION = 8;
 
 const resumeTemplateOptions: { value: StudioInputs["resumeTemplate"]; label: string; note: string }[] = [
   { value: "executiveBriefing", label: "Executive Briefing", note: "Crisp, premium, CEO-readable" },
@@ -54,12 +54,15 @@ const emptyState: StudioState = {
   saveKey: false,
   inputs: emptyInputs,
   walkthrough: null,
+  outputPrompt: "",
+  outputWalkthrough: null,
   selectedStepId: null,
   selectedMode: "compose",
   status: "Paste source material, then generate the walkthrough.",
   error: "",
   isGenerating: false,
-  isRevising: false
+  isRevising: false,
+  isPolishingOutput: false
 };
 
 export default function App() {
@@ -76,8 +79,10 @@ export default function App() {
       walkthrough: null,
       selectedStepId: null,
       selectedMode: "compose",
+      outputWalkthrough: null,
       isGenerating: false,
       isRevising: false,
+      isPolishingOutput: false,
       error: "",
       status: "App updated. Your pasted inputs were kept, and the stale generated walkthrough was cleared automatically."
     }));
@@ -145,13 +150,26 @@ export default function App() {
         model: resolveModelForProvider(state.provider, state.model),
         inputs: state.inputs
       });
+      const outputWalkthrough = currentOutputPrompt(state)
+        ? await polishOverlayOutput({
+            provider: state.provider,
+            apiKey: activeApiKey(state),
+            model: resolveModelForProvider(state.provider, state.model),
+            inputs: state.inputs,
+            walkthrough,
+            instruction: currentOutputPrompt(state)
+          })
+        : null;
       setState((current) => ({
         ...current,
         walkthrough,
+        outputWalkthrough,
         selectedStepId: walkthrough.steps[0]?.id ?? null,
-        selectedMode: "edit",
+        selectedMode: current.outputPrompt.trim() ? "output" : "edit",
         isGenerating: false,
-        status: "Everything regenerated. Edit the resume and steps until the artifact feels right."
+        status: current.outputPrompt.trim()
+          ? "Everything regenerated and the saved output prompt was reapplied."
+          : "Everything regenerated. Edit the resume and steps until the artifact feels right."
       }));
     } catch (error) {
       setState((current) => ({
@@ -184,8 +202,9 @@ export default function App() {
               steps: current.walkthrough.steps.map((step) => (step.id === selectedStep.id ? { ...revisedStep, id: selectedStep.id } : step))
             }
           : current.walkthrough,
+        outputWalkthrough: null,
         isRevising: false,
-        status: "Step revised. Review the text before export."
+        status: "Step revised. Reapply the output prompt before export if you want the final artifact updated."
       }));
       setRevisionPrompt("");
     } catch (error) {
@@ -202,6 +221,7 @@ export default function App() {
     setState((current) => ({
       ...current,
       inputs: { ...current.inputs, ...patch },
+      outputWalkthrough: null,
       error: "",
       status: "Draft saved locally."
     }));
@@ -211,7 +231,8 @@ export default function App() {
     setState((current) => ({
       ...current,
       walkthrough: current.walkthrough ? { ...current.walkthrough, ...patch } : current.walkthrough,
-      status: "Walkthrough edits saved locally."
+      outputWalkthrough: null,
+      status: "Walkthrough edits saved locally. Reapply the output prompt before export if needed."
     }));
   }
 
@@ -225,7 +246,8 @@ export default function App() {
             steps: current.walkthrough.steps.map((step) => (step.id === selectedStep.id ? { ...step, ...patch } : step))
           }
         : current.walkthrough,
-      status: "Step edits saved locally."
+      outputWalkthrough: null,
+      status: "Step edits saved locally. Reapply the output prompt before export if needed."
     }));
   }
 
@@ -259,6 +281,7 @@ export default function App() {
       walkthrough: current.walkthrough
         ? { ...current.walkthrough, steps: [...current.walkthrough.steps, step] }
         : createManualWalkthrough(step),
+      outputWalkthrough: null,
       selectedStepId: id,
       selectedMode: "edit",
       status: "Blank step added."
@@ -271,16 +294,48 @@ export default function App() {
     setState((current) => ({
       ...current,
       walkthrough: current.walkthrough ? { ...current.walkthrough, steps } : null,
+      outputWalkthrough: null,
       selectedStepId: steps[0]?.id ?? null,
       status: "Step removed."
     }));
   }
 
   function exportHtml() {
-    if (!state.walkthrough) return;
-    const html = buildOverlayHtml(state.walkthrough, state.inputs);
-    download(`${slug(state.walkthrough.candidateName || "resume")}-${slug(state.walkthrough.targetTitle || "walkthrough")}.html`, html, "text/html;charset=utf-8");
+    const exportModel = state.outputWalkthrough ?? state.walkthrough;
+    if (!exportModel) return;
+    const html = buildOverlayHtml(exportModel, state.inputs);
+    download(`${slug(exportModel.candidateName || "resume")}-${slug(exportModel.targetTitle || "walkthrough")}.html`, html, "text/html;charset=utf-8");
     setState((current) => ({ ...current, status: "Standalone HTML exported." }));
+  }
+
+  async function handlePolishOutput() {
+    if (!state.walkthrough || !state.outputPrompt.trim() || state.isPolishingOutput) return;
+    setState((current) => ({ ...current, isPolishingOutput: true, error: "", status: "Applying the output-only prompt to the final artifact..." }));
+    try {
+      const outputWalkthrough = await polishOverlayOutput({
+        provider: state.provider,
+        apiKey: activeApiKey(state),
+        model: resolveModelForProvider(state.provider, state.model),
+        inputs: state.inputs,
+        walkthrough: state.walkthrough,
+        instruction: state.outputPrompt
+      });
+      setState((current) => ({
+        ...current,
+        outputWalkthrough,
+        selectedStepId: outputWalkthrough.steps[0]?.id ?? current.selectedStepId,
+        selectedMode: "output",
+        isPolishingOutput: false,
+        status: "Output prompt applied. Preview and export now use the polished output variant."
+      }));
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        isPolishingOutput: false,
+        error: error instanceof Error ? error.message : "Could not polish final output.",
+        status: "Output polish stopped."
+      }));
+    }
   }
 
   function reset() {
@@ -292,7 +347,8 @@ export default function App() {
       model: defaultModelForProvider(state.provider),
       openaiApiKey: state.saveKey ? state.openaiApiKey : "",
       anthropicApiKey: state.saveKey ? state.anthropicApiKey : "",
-      saveKey: state.saveKey
+      saveKey: state.saveKey,
+      outputPrompt: state.outputPrompt
     });
     setRevisionPrompt("");
   }
@@ -313,6 +369,9 @@ export default function App() {
           </button>
           <button type="button" className={state.selectedMode === "preview" ? "mode active" : "mode"} onClick={() => setState((current) => ({ ...current, selectedMode: "preview" }))}>
             Preview
+          </button>
+          <button type="button" className={state.selectedMode === "output" ? "mode active" : "mode"} onClick={() => setState((current) => ({ ...current, selectedMode: "output" }))}>
+            Output
           </button>
           <button type="button" className="export-button" onClick={exportHtml} disabled={!state.walkthrough}>
             Export HTML
@@ -364,15 +423,25 @@ export default function App() {
           )}
 
           {state.selectedMode === "preview" && (
-            <PreviewNotes walkthrough={state.walkthrough} onExport={exportHtml} />
+            <PreviewNotes walkthrough={state.outputWalkthrough ?? state.walkthrough} hasOutputVariant={Boolean(state.outputWalkthrough)} onExport={exportHtml} />
+          )}
+
+          {state.selectedMode === "output" && (
+            <OutputPolishPanel
+              state={state}
+              onPromptChange={(outputPrompt) => setState((current) => ({ ...current, outputPrompt, outputWalkthrough: null, status: "Output prompt saved. Apply it to update the export preview." }))}
+              onApply={handlePolishOutput}
+              onClearVariant={() => setState((current) => ({ ...current, outputWalkthrough: null, status: "Output variant cleared. Export will use the base generated walkthrough." }))}
+              onExport={exportHtml}
+            />
           )}
         </section>
 
         <section className="preview-stage" aria-label="Live walkthrough preview">
           <OverlayPreview
-            model={state.walkthrough}
+            model={state.outputWalkthrough ?? state.walkthrough}
             inputs={state.inputs}
-            selectedStep={selectedStep}
+            selectedStep={(state.outputWalkthrough ?? state.walkthrough)?.steps.find((step) => step.id === selectedStep?.id) ?? (state.outputWalkthrough ?? state.walkthrough)?.steps[0] ?? null}
             onSelectStep={(id) => setState((current) => ({ ...current, selectedStepId: id, selectedMode: "edit" }))}
           />
         </section>
@@ -383,6 +452,15 @@ export default function App() {
             <span />
             <h2>Building the resume walkthrough</h2>
             <p>Reworking the resume, mapping evidence to the role, and preparing the guided overlay.</p>
+          </div>
+        </div>
+      )}
+      {state.isPolishingOutput && (
+        <div className="loading-overlay" role="status" aria-live="polite">
+          <div>
+            <span />
+            <h2>Polishing the final output</h2>
+            <p>Applying the saved output prompt to the resume, overlay wording, and exported artifact.</p>
           </div>
         </div>
       )}
@@ -788,13 +866,61 @@ function EditPanel({
   );
 }
 
-function PreviewNotes({ walkthrough, onExport }: { walkthrough: OverlayWalkthroughModel | null; onExport: () => void }) {
+function OutputPolishPanel({
+  state,
+  onPromptChange,
+  onApply,
+  onClearVariant,
+  onExport
+}: {
+  state: StudioState;
+  onPromptChange: (value: string) => void;
+  onApply: () => void;
+  onClearVariant: () => void;
+  onExport: () => void;
+}) {
+  return (
+    <div className="output-polish">
+      <h2>Final output polish</h2>
+      <p>
+        This prompt only changes the exported artifact. It leaves the base generated resume and step editor intact, then creates a separate polished output variant for preview and export.
+      </p>
+      <label>
+        Output-only prompt
+        <textarea
+          value={state.outputPrompt}
+          onChange={(event) => onPromptChange(event.target.value)}
+          rows={9}
+          placeholder="Example: make the final artifact feel more like a premium resume with a calm guided tour; reduce hype; make the overlay speak directly to a CEO; tighten the resume bullets; keep the strongest hiring case upfront."
+        />
+      </label>
+      <div className="action-row">
+        <button type="button" className="primary" onClick={onApply} disabled={!state.walkthrough || !state.outputPrompt.trim() || state.isPolishingOutput}>
+          {state.isPolishingOutput ? "Applying output prompt..." : "Apply to final output"}
+        </button>
+        <button type="button" className="quiet" onClick={onClearVariant} disabled={!state.outputWalkthrough}>
+          Clear output variant
+        </button>
+        <button type="button" className="export-button" onClick={onExport} disabled={!state.walkthrough}>
+          Export current output
+        </button>
+      </div>
+      <div className="output-state">
+        <strong>{state.outputWalkthrough ? "Preview/export are using the polished output variant." : "Preview/export are using the base generated walkthrough."}</strong>
+        <span>When this prompt is saved, full regeneration applies it again after rebuilding the base resume.</span>
+      </div>
+    </div>
+  );
+}
+
+function PreviewNotes({ walkthrough, hasOutputVariant, onExport }: { walkthrough: OverlayWalkthroughModel | null; hasOutputVariant: boolean; onExport: () => void }) {
   return (
     <div className="preview-notes">
       <h2>What will export</h2>
       <p>
         The exported file is a single offline HTML document with embedded CSS, JavaScript, and JSON data. The API key and builder draft controls are not included.
       </p>
+      {hasOutputVariant && <p className="output-badge">Using output-polished variant.</p>}
       {walkthrough ? (
         <>
           <ul>
@@ -980,9 +1106,11 @@ function loadState(): StudioState {
       resumeTemplate: rawInputs.resumeTemplate ?? "executiveBriefing"
     };
     const migratedWalkthrough = parsed.walkthrough ? migrateWalkthrough(parsed.walkthrough) : null;
+    const migratedOutputWalkthrough = parsed.outputWalkthrough ? migrateWalkthrough(parsed.outputWalkthrough) : null;
     const savedVersion = typeof parsed.draftSchemaVersion === "number" ? parsed.draftSchemaVersion : 0;
     const staleWalkthrough = Boolean(migratedWalkthrough) && (savedVersion < DRAFT_SCHEMA_VERSION || !isWalkthroughCompatible(migratedWalkthrough));
     const walkthrough = staleWalkthrough ? null : migratedWalkthrough;
+    const outputWalkthrough = staleWalkthrough || !isWalkthroughCompatible(migratedOutputWalkthrough) ? null : migratedOutputWalkthrough;
     const selectedStepId = walkthrough?.steps.some((step) => step.id === parsed.selectedStepId) ? parsed.selectedStepId ?? null : walkthrough?.steps[0]?.id ?? null;
     const selectedMode = staleWalkthrough ? "compose" : parsed.selectedMode ?? emptyState.selectedMode;
     const status = staleWalkthrough
@@ -999,11 +1127,14 @@ function loadState(): StudioState {
       saveKey: Boolean(savedKeys.openaiApiKey || savedKeys.anthropicApiKey),
       inputs,
       walkthrough,
+      outputPrompt: typeof parsed.outputPrompt === "string" ? parsed.outputPrompt : "",
+      outputWalkthrough,
       selectedStepId,
       selectedMode,
       status,
       isGenerating: false,
       isRevising: false,
+      isPolishingOutput: false,
       error: ""
     };
   } catch {
@@ -1156,6 +1287,10 @@ function parseDetailBlocks(text: string): OverlayDetailBlock[] {
 
 function activeApiKey(state: StudioState): string {
   return state.provider === "anthropic" ? state.anthropicApiKey : state.openaiApiKey;
+}
+
+function currentOutputPrompt(state: StudioState): string {
+  return state.outputPrompt.trim();
 }
 
 function defaultModelForProvider(provider: StudioState["provider"]): string {
