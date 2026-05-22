@@ -124,6 +124,8 @@ export function buildHtmlPolishInput(html: string, instruction: string): string 
         "The returned html must be one complete standalone HTML document starting with <!doctype html> or <html.",
         "Keep all CSS, JavaScript, and JSON data embedded in the file. Do not introduce CDN links, external fonts, external images, external scripts, tracking, API calls, or backend requirements.",
         "This is a final-artifact pass. Change CSS, layout, markup, and JavaScript directly when the user asks for design, interaction, layout, or behavior changes.",
+        "For visual/design/color/layout requests, do not change the contents of <script id=\"walkthrough-data\" type=\"application/json\">. Preserve that JSON exactly.",
+        "If the user explicitly asks to change wording/content, you may edit the embedded walkthrough JSON, but it must remain strictly valid JSON with no extra braces, comments, trailing commas, or prose outside the JSON.",
         "Preserve the resume facts, source evidence, and grounded claims already present. Do not invent employers, dates, degrees, projects, metrics, technologies, titles, funding, or outcomes.",
         "Keep the guided overlay functional: Interactive View starts/restarts the tour, Resume Only View shows the resume/brief without the tutorial, Save as PDF triggers print.",
         "Keep the file usable by double-clicking locally in a modern browser."

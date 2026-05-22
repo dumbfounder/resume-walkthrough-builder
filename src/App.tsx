@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch
 import { generateOverlayWalkthrough, polishStandaloneHtml, reviseOverlayStep } from "./ai/openaiClient";
 import { buildOverlayHtml } from "./export/overlayHtmlExporter";
 import type { ExportDesign, OverlayDetailBlock, OverlayStep, OverlayWalkthroughModel, PolishedResume, StudioInputs, StudioState } from "./types/overlay";
+import { isStandaloneHtmlUsable } from "./utils/htmlValidation";
 
 const STORAGE_KEY = "resume-overlay-studio:v3";
 const KEY_STORAGE_KEY = "resume-overlay-studio:provider-keys:v2";
@@ -340,7 +341,7 @@ export default function App() {
   function exportHtml() {
     const exportModel = state.outputWalkthrough ?? state.walkthrough;
     if (!exportModel && !state.outputHtml) return;
-    const html = state.outputHtml ?? buildOverlayHtml(exportModel as OverlayWalkthroughModel, state.inputs);
+    const html = state.outputHtml && isStandaloneHtmlUsable(state.outputHtml) ? state.outputHtml : buildOverlayHtml(exportModel as OverlayWalkthroughModel, state.inputs);
     const filenameModel = exportModel ?? state.walkthrough;
     download(`${slug(filenameModel?.candidateName || "resume")}-${slug(filenameModel?.targetTitle || "walkthrough")}.html`, html, "text/html;charset=utf-8");
     setState((current) => ({ ...current, status: "Standalone HTML exported." }));
@@ -350,7 +351,7 @@ export default function App() {
     if (!state.walkthrough || !state.outputPrompt.trim() || state.isPolishingOutput) return;
     setState((current) => ({ ...current, isPolishingOutput: true, error: "", status: "Sending the full standalone HTML to the model for direct final-artifact editing..." }));
     try {
-      const sourceHtml = state.outputHtml ?? buildOverlayHtml(state.outputWalkthrough ?? state.walkthrough, state.inputs);
+      const sourceHtml = state.outputHtml && isStandaloneHtmlUsable(state.outputHtml) ? state.outputHtml : buildOverlayHtml(state.outputWalkthrough ?? state.walkthrough, state.inputs);
       const outputHtml = await polishStandaloneHtml({
         provider: state.provider,
         apiKey: activeApiKey(state),
@@ -478,7 +479,7 @@ export default function App() {
         <section className="preview-stage" aria-label="Live walkthrough preview">
           <OverlayPreview
             model={state.outputWalkthrough ?? state.walkthrough}
-            htmlOverride={state.outputHtml}
+            htmlOverride={state.outputHtml && isStandaloneHtmlUsable(state.outputHtml) ? state.outputHtml : null}
             inputs={state.inputs}
             selectedStep={(state.outputWalkthrough ?? state.walkthrough)?.steps.find((step) => step.id === selectedStep?.id) ?? (state.outputWalkthrough ?? state.walkthrough)?.steps[0] ?? null}
             onSelectStep={(id) => setState((current) => ({ ...current, selectedStepId: id, selectedMode: "edit" }))}
@@ -1206,9 +1207,17 @@ function normalizeSavedState(
   const incompatibleWalkthrough = Boolean(migratedWalkthrough) && !isWalkthroughCompatible(migratedWalkthrough);
   const walkthrough = incompatibleWalkthrough ? null : migratedWalkthrough;
   const outputWalkthrough = !isWalkthroughCompatible(migratedOutputWalkthrough) ? null : migratedOutputWalkthrough;
+  const outputHtml = typeof parsed.outputHtml === "string" && parsed.outputHtml.trim() && isStandaloneHtmlUsable(parsed.outputHtml) ? parsed.outputHtml : null;
   const selectedStepId = walkthrough?.steps.some((step) => step.id === parsed.selectedStepId) ? parsed.selectedStepId ?? null : walkthrough?.steps[0]?.id ?? null;
   const selectedMode = incompatibleWalkthrough ? "compose" : parsed.selectedMode ?? emptyState.selectedMode;
-  const status = statusOverride || (incompatibleWalkthrough ? "Saved draft was missing required walkthrough structure, so the pasted inputs were kept." : parsed.status || emptyState.status);
+  const invalidOutputHtml = Boolean(parsed.outputHtml && !outputHtml);
+  const status =
+    statusOverride ||
+    (invalidOutputHtml
+      ? "Saved HTML edit was invalid, so it was cleared. The generated walkthrough was kept."
+      : incompatibleWalkthrough
+        ? "Saved draft was missing required walkthrough structure, so the pasted inputs were kept."
+        : parsed.status || emptyState.status);
 
   return {
     ...emptyState,
@@ -1222,7 +1231,7 @@ function normalizeSavedState(
     walkthrough,
     outputPrompt: typeof parsed.outputPrompt === "string" ? parsed.outputPrompt : "",
     outputWalkthrough,
-    outputHtml: typeof parsed.outputHtml === "string" && parsed.outputHtml.trim() ? parsed.outputHtml : null,
+    outputHtml,
     selectedStepId,
     selectedMode,
     status,
@@ -1308,7 +1317,7 @@ async function saveServerWorkSession(projectId: string, state: StudioState, sign
       const data = (await response.json()) as { savedAt?: string };
       return { ok: true, savedAt: data.savedAt || new Date().toISOString() };
     }
-    if (response.status === 401 || response.status === 404) {
+    if (response.status === 401 || response.status === 404 || response.status === 503) {
       return null;
     }
     const data = (await response.json().catch(() => null)) as { error?: string } | null;

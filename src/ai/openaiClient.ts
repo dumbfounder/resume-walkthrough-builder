@@ -1,5 +1,6 @@
 import { buildHtmlPolishInput, buildOutputPolishInput, buildStepRevisionInput, buildWalkthroughInput, overlaySystemPrompt } from "./overlayPrompts";
 import { overlayStepSchema, overlayWalkthroughSchema } from "./overlaySchema";
+import { validateStandaloneHtmlDocument } from "../utils/htmlValidation";
 import type {
   LlmGenerateRequest,
   LlmPolishHtmlRequest,
@@ -43,7 +44,7 @@ export async function polishOverlayOutput(request: LlmPolishOutputRequest): Prom
 
 export async function polishStandaloneHtml(request: LlmPolishHtmlRequest): Promise<string> {
   const raw = request.provider === "anthropic" ? await callClaudeHtmlPolish(request) : await callOpenAiHtmlPolish(request);
-  return normalizeHtmlOutput(raw);
+  return normalizeHtmlOutput(raw, request.html);
 }
 
 async function callOpenAiWalkthrough(request: LlmGenerateRequest): Promise<unknown> {
@@ -382,20 +383,24 @@ function unwrapWalkthrough(value: unknown): unknown {
   return candidates.find((candidate) => isRecord(candidate) && (Array.isArray(candidate.steps) || Array.isArray(candidate.walkthroughSteps))) ?? value;
 }
 
-function normalizeHtmlOutput(value: unknown): string {
+function normalizeHtmlOutput(value: unknown, sourceHtml: string): string {
   const html = isRecord(value) && typeof value.html === "string" ? value.html.trim() : typeof value === "string" ? value.trim() : "";
-  if (!html) throw new Error("The model did not return revised HTML.");
-  if (!/^<!doctype html>|^<html[\s>]/i.test(html)) {
-    throw new Error("The model did not return a complete standalone HTML document.");
+  try {
+    return validateStandaloneHtmlDocument(html);
+  } catch (error) {
+    const repaired = restoreWalkthroughDataScript(html, sourceHtml);
+    if (repaired !== html) {
+      return validateStandaloneHtmlDocument(repaired);
+    }
+    throw error;
   }
-  if (/<script\b[^>]*\bsrc\s*=|<link\b[^>]*\bhref\s*=|@import\s+url|url\(\s*["']?https?:\/\//i.test(stripEmbeddedJson(html))) {
-    throw new Error("The revised HTML appears to include external dependencies. Ask for a fully self-contained local file.");
-  }
-  return html;
 }
 
-function stripEmbeddedJson(html: string): string {
-  return html.replace(/<script[^>]*type=["']application\/json["'][\s\S]*?<\/script>/gi, "");
+function restoreWalkthroughDataScript(html: string, sourceHtml: string): string {
+  const dataScriptPattern = /<script\b(?=[^>]*\bid=["']walkthrough-data["'])(?=[^>]*\btype=["']application\/json["'])[^>]*>[\s\S]*?<\/script>/i;
+  const sourceDataScript = sourceHtml.match(dataScriptPattern)?.[0];
+  if (!sourceDataScript || !dataScriptPattern.test(html)) return html;
+  return html.replace(dataScriptPattern, sourceDataScript);
 }
 
 function firstArray(...values: unknown[]): unknown[] {
