@@ -86,6 +86,9 @@ This repo includes a Render web service blueprint. It builds the Vite app and se
 - Email delivery uses `RESEND_API_KEY` or `SENDGRID_API_KEY`.
 - Set `MAGIC_LINK_FROM` to a verified sender for the selected email provider.
 - Set `PUBLIC_APP_URL` to the deployed Render URL so links point to the live app.
+- Authenticated editing sessions are backed up through `/api/work-session` while someone works on a resume.
+- Server-side work-session backups strip provider API keys before writing.
+- On Render, `DATA_DIR` should point at the mounted persistent disk so draft backups survive deploys and restarts.
 
 ## Credibility Rules
 

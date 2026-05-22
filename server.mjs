@@ -1,11 +1,14 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, statSync } from "node:fs";
+import { appendFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
-import { extname, join, normalize } from "node:path";
+import { extname, join, normalize, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL(".", import.meta.url));
 const distDir = join(root, "dist");
+const dataDir = process.env.DATA_DIR || join(root, "data");
+const sessionsDir = join(dataDir, "work-sessions");
 const port = Number(process.env.PORT || 4173);
 const notifyTo = process.env.LOGIN_NOTIFY_TO || "chris@searchles.com";
 const magicLinkFrom = process.env.MAGIC_LINK_FROM || "Resume Walkthrough Builder <noreply@resume-walkthrough-builder.local>";
@@ -13,7 +16,7 @@ const cookieName = "resume_builder_session";
 const tokenTtlMs = 15 * 60 * 1000;
 const sessionTtlSeconds = 7 * 24 * 60 * 60;
 const pendingTokens = new Map();
-const sessions = new Set();
+const sessions = new Map();
 
 const mimeTypes = {
   ".html": "text/html; charset=utf-8",
@@ -46,8 +49,24 @@ createServer(async (req, res) => {
       return;
     }
 
-    if (!isAuthorized(req)) {
+    const authorizedSession = getAuthorizedSession(req);
+    if (!authorizedSession) {
       sendLogin(res);
+      return;
+    }
+
+    if (url.pathname === "/api/session" && req.method === "GET") {
+      sendJson(res, 200, {
+        ok: true,
+        email: authorizedSession.email,
+        loggedInAt: authorizedSession.loggedInAt,
+        sessionTtlSeconds
+      });
+      return;
+    }
+
+    if (url.pathname === "/api/work-session" && req.method === "POST") {
+      await saveWorkSession(req, res, authorizedSession);
       return;
     }
 
@@ -123,7 +142,14 @@ async function handleMagicLink(req, res, url) {
 
   pendingTokens.delete(token);
   const session = randomBytes(32).toString("base64url");
-  sessions.add(session);
+  sessions.set(session, {
+    email: record.email,
+    loggedInAt: new Date().toISOString(),
+    loginIp: requestIp(req),
+    loginUserAgent: String(req.headers["user-agent"] || ""),
+    requestIp: record.requestedIp,
+    requestUserAgent: record.requestedUserAgent
+  });
   res.statusCode = 303;
   res.setHeader("Set-Cookie", `${cookieName}=${session}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${sessionTtlSeconds}`);
   res.setHeader("Location", "/");
@@ -166,14 +192,17 @@ function normalizeEmail(value) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ? email : "";
 }
 
-function isAuthorized(req) {
+function getAuthorizedSession(req) {
   const session = String(req.headers.cookie || "")
     .split(";")
     .map((part) => part.trim())
     .find((part) => part.startsWith(`${cookieName}=`))
     ?.slice(cookieName.length + 1);
-  if (!session) return false;
-  return [...sessions].some((known) => safeEqual(known, session));
+  if (!session) return null;
+  for (const [known, metadata] of sessions.entries()) {
+    if (safeEqual(known, session)) return metadata;
+  }
+  return null;
 }
 
 function safeEqual(a, b) {
@@ -303,6 +332,90 @@ async function pipeUpstream(upstream, res) {
   res.end(text);
 }
 
+async function saveWorkSession(req, res, authorizedSession) {
+  if (!String(req.headers["content-type"] || "").includes("application/json")) {
+    sendJson(res, 415, { error: "Expected application/json" });
+    return;
+  }
+
+  const body = await readBody(req, 2_500_000);
+  let payload;
+  try {
+    payload = JSON.parse(body.toString("utf8"));
+  } catch {
+    sendJson(res, 400, { error: "Invalid JSON" });
+    return;
+  }
+
+  const projectId = safeId(payload.projectId || "default");
+  const savedAt = new Date().toISOString();
+  const record = {
+    version: 1,
+    projectId,
+    savedAt,
+    email: authorizedSession.email,
+    userAgent: String(req.headers["user-agent"] || ""),
+    ip: requestIp(req),
+    summary: summarizeDraft(payload.state),
+    state: sanitizeStudioState(payload.state)
+  };
+
+  mkdirSync(sessionsDir, { recursive: true });
+  const userDir = join(sessionsDir, safeId(authorizedSession.email));
+  mkdirSync(userDir, { recursive: true });
+
+  const latestPath = safeJoin(userDir, `${projectId}.latest.json`);
+  const logPath = safeJoin(userDir, `${projectId}.jsonl`);
+  const data = JSON.stringify(record);
+  await Promise.all([
+    writeFile(latestPath, `${JSON.stringify(record, null, 2)}\n`),
+    appendFile(logPath, `${data}\n`)
+  ]);
+
+  sendJson(res, 200, {
+    ok: true,
+    savedAt,
+    projectId,
+    email: authorizedSession.email
+  });
+}
+
+function sanitizeStudioState(state) {
+  if (!state || typeof state !== "object") return null;
+  const {
+    openaiApiKey: _openaiApiKey,
+    anthropicApiKey: _anthropicApiKey,
+    isGenerating: _isGenerating,
+    isRevising: _isRevising,
+    error: _error,
+    ...safeState
+  } = state;
+  return {
+    ...safeState,
+    openaiApiKey: "",
+    anthropicApiKey: "",
+    saveKey: false,
+    isGenerating: false,
+    isRevising: false,
+    error: ""
+  };
+}
+
+function summarizeDraft(state) {
+  const inputs = state?.inputs || {};
+  const walkthrough = state?.walkthrough || null;
+  return {
+    resumeChars: String(inputs.resumeText || "").length,
+    aboutChars: String(inputs.aboutText || "").length,
+    targetChars: String(inputs.targetText || "").length,
+    hasWalkthrough: Boolean(walkthrough),
+    candidateName: String(walkthrough?.candidateName || walkthrough?.polishedResume?.name || "").slice(0, 120),
+    targetTitle: String(walkthrough?.targetTitle || "").slice(0, 160),
+    stepCount: Array.isArray(walkthrough?.steps) ? walkthrough.steps.length : 0,
+    selectedMode: String(state?.selectedMode || "")
+  };
+}
+
 async function serveStatic(url, res) {
   const requested = url.pathname === "/" ? "/index.html" : url.pathname;
   const safePath = normalize(decodeURIComponent(requested)).replace(/^(\.\.[/\\])+/, "");
@@ -338,10 +451,34 @@ function sendJson(res, status, value) {
   res.end(JSON.stringify(value));
 }
 
-async function readBody(req) {
+async function readBody(req, maxBytes = 20_000_000) {
   const chunks = [];
+  let total = 0;
   for await (const chunk of req) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  for (const chunk of chunks) {
+    total += chunk.length;
+    if (total > maxBytes) throw new Error("Request body too large");
+  }
   return Buffer.concat(chunks);
+}
+
+function safeId(value) {
+  const id = String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 120);
+  return id || "default";
+}
+
+function safeJoin(base, filename) {
+  const target = resolve(base, filename);
+  const allowedBase = resolve(base);
+  if (!target.startsWith(`${allowedBase}/`) && target !== allowedBase) {
+    throw new Error("Unsafe storage path");
+  }
+  return target;
 }
 
 function escapeHtml(value) {

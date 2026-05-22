@@ -6,7 +6,13 @@ services:
     buildCommand: npm ci && npm run build
     startCommand: npm start
     healthCheckPath: /healthz
+    disk:
+      name: resume-work-sessions
+      mountPath: /var/data/resume-work-sessions
+      sizeGB: 1
     envVars:
+      - key: DATA_DIR
+        value: /var/data/resume-work-sessions
       - key: LOGIN_NOTIFY_TO
         value: chris@searchles.com
       - key: MAGIC_LINK_FROM

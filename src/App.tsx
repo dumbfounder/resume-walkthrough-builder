@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import { generateOverlayWalkthrough, reviseOverlayStep } from "./ai/openaiClient";
 import { buildOverlayHtml } from "./export/overlayHtmlExporter";
 import type { OverlayDetailBlock, OverlayStep, OverlayWalkthroughModel, PolishedResume, StudioInputs, StudioState } from "./types/overlay";
 
 const STORAGE_KEY = "resume-overlay-studio:v3";
 const KEY_STORAGE_KEY = "resume-overlay-studio:provider-keys:v2";
+const PROJECT_SESSION_KEY = "resume-overlay-studio:project-session-id:v1";
 const DRAFT_SCHEMA_VERSION = 7;
 
 const resumeTemplateOptions: { value: StudioInputs["resumeTemplate"]; label: string; note: string }[] = [
@@ -64,6 +65,7 @@ const emptyState: StudioState = {
 export default function App() {
   const [state, setState] = useState<StudioState>(() => loadState());
   const [revisionPrompt, setRevisionPrompt] = useState("");
+  const projectSessionId = useRef(readProjectSessionId());
 
   useEffect(() => {
     if (state.draftSchemaVersion === DRAFT_SCHEMA_VERSION) return;
@@ -89,6 +91,18 @@ export default function App() {
     if (!state.saveKey) {
       localStorage.removeItem(KEY_STORAGE_KEY);
     }
+  }, [state]);
+
+  useEffect(() => {
+    if (!hasMeaningfulDraft(state)) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      saveServerWorkSession(projectSessionId.current, state, controller.signal);
+    }, 1400);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
   }, [state]);
 
   const selectedStep = useMemo(() => {
@@ -267,6 +281,7 @@ export default function App() {
 
   function reset() {
     localStorage.removeItem(STORAGE_KEY);
+    projectSessionId.current = createProjectSessionId();
     setState({
       ...emptyState,
       provider: state.provider,
@@ -988,6 +1003,63 @@ function loadState(): StudioState {
     };
   } catch {
     return emptyState;
+  }
+}
+
+function readProjectSessionId(): string {
+  const existing = localStorage.getItem(PROJECT_SESSION_KEY);
+  if (existing) return existing;
+  return createProjectSessionId();
+}
+
+function createProjectSessionId(): string {
+  const generated = crypto.randomUUID ? crypto.randomUUID() : `project-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  localStorage.setItem(PROJECT_SESSION_KEY, generated);
+  return generated;
+}
+
+function hasMeaningfulDraft(state: StudioState): boolean {
+  return Boolean(
+    state.inputs.resumeText.trim() ||
+      state.inputs.aboutText.trim() ||
+      state.inputs.targetText.trim() ||
+      state.inputs.guidanceText.trim() ||
+      state.walkthrough
+  );
+}
+
+async function saveServerWorkSession(projectId: string, state: StudioState, signal: AbortSignal) {
+  try {
+    const {
+      openaiApiKey: _openaiApiKey,
+      anthropicApiKey: _anthropicApiKey,
+      isGenerating: _isGenerating,
+      isRevising: _isRevising,
+      error: _error,
+      ...persistable
+    } = state;
+    const response = await fetch("/api/work-session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        projectId,
+        state: {
+          ...persistable,
+          openaiApiKey: "",
+          anthropicApiKey: "",
+          saveKey: false,
+          isGenerating: false,
+          isRevising: false,
+          error: ""
+        }
+      }),
+      signal
+    });
+    if (!response.ok && response.status !== 401 && response.status !== 404) {
+      console.warn(`Work session backup failed: ${response.status}`);
+    }
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") return;
   }
 }
 
