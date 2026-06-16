@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type Dispatch, type SetStateAction } from "react";
 import { generateOverlayWalkthrough, polishStandaloneHtml, reviseOverlayStep } from "./ai/openaiClient";
 import { buildOverlayHtml } from "./export/overlayHtmlExporter";
-import { applyDesignIntentFallback } from "./export/designIntentFallback";
+import { applyDesignIntentFallback, canApplyDesignIntentLocally } from "./export/designIntentFallback";
 import type { ExportDesign, OverlayDetailBlock, OverlayStep, OverlayWalkthroughModel, PolishedResume, StudioInputs, StudioState } from "./types/overlay";
 import { isStandaloneHtmlUsable } from "./utils/htmlValidation";
 
@@ -355,6 +355,20 @@ export default function App() {
     setState((current) => ({ ...current, isPolishingOutput: true, error: "", status: "Sending the full standalone HTML to the model for direct final-artifact editing..." }));
     try {
       const sourceHtml = state.outputHtml && isStandaloneHtmlUsable(state.outputHtml) ? state.outputHtml : buildOverlayHtml(state.outputWalkthrough ?? state.walkthrough, state.inputs);
+      if (canApplyDesignIntentLocally(state.outputPrompt)) {
+        const fallback = applyDesignIntentFallback(sourceHtml, state.outputPrompt);
+        if (fallback.applied) {
+          setState((current) => ({
+            ...current,
+            outputHtml: fallback.html,
+            outputWalkthrough: null,
+            selectedMode: "output",
+            isPolishingOutput: false,
+            status: "Readable visual style applied locally to the standalone HTML."
+          }));
+          return;
+        }
+      }
       const outputHtml = await polishStandaloneHtml({
         provider: state.provider,
         apiKey: activeApiKey(state),
